@@ -1,0 +1,27 @@
+{
+  "name": "rescu",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "chain:build": "NO_DNA=1 anchor build && node scripts/sync-idl.mjs",
+    "chain:test": "pnpm chain:build && cargo test -p rescu --lib && NO_DNA=1 anchor test --validator legacy --skip-build",
+    "chain:validator": "bash scripts/validator.sh",
+    "chain:bench": "pnpm --filter @rescu/chain-tests bench",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "typescript": "6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "bigint-buffer",
+      "bufferutil",
+      "utf-8-validate"
+    ]
+  }
+}

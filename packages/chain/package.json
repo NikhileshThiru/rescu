@@ -1,0 +1,25 @@
+{
+  "name": "@rescu/chain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The only place that talks to Solana: PDAs, hook accounts, instructions, error decoding.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./idl": "./src/idl/rescu.json"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anchor-lang/core": "1.1.2",
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.99.0",
+    "bn.js": "5.2.5"
+  },
+  "devDependencies": {
+    "@types/bn.js": "5.2.0",
+    "@types/node": "22.20.4",
+    "typescript": "6.0.3"
+  }
+}

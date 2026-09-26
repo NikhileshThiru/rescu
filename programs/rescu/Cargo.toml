@@ -1,0 +1,31 @@
+[package]
+name = "rescu"
+version = "0.1.0"
+description = "Rescu relief dollar: merchant registry, treasury and Token-2022 transfer hook"
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "rescu"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = "=1.1.2"
+anchor-spl = { version = "=1.1.2", default-features = false, features = ["token", "token_2022", "token_2022_extensions", "associated_token"] }
+spl-transfer-hook-interface = "2.1.0"
+spl-tlv-account-resolution = "0.11"
+spl-token-2022-interface = "2.1"
+spl-discriminator = "0.5"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
