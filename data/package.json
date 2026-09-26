@@ -9,16 +9,23 @@
     "report": "tsx pipeline/report.ts",
     "migrate": "tsx pipeline/migrate.ts",
     "load": "tsx pipeline/load.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "rain": "tsx pipeline/rain.ts",
+    "features": "tsx pipeline/features.ts",
+    "fit": "tsx pipeline/fit.ts",
+    "surge-check": "tsx pipeline/surge-check.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@rescu/aid-model": "workspace:*",
+    "geotiff": "3.0.5",
     "h3-js": "4.5.0",
     "postgres": "3.4.9"
   },
   "devDependencies": {
     "@types/node": "22.20.4",
     "tsx": "4.23.15",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "5.0.2"
   }
 }

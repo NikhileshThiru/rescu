@@ -1,0 +1,166 @@
+{
+ "_comment": "Demo storms appear in the app; every storm here is used to tune the need model against FEMA's real payouts.",
+ "storms": [
+  {
+   "id": "AL032004",
+   "name": "Charley",
+   "year": 2004,
+   "slug": "charley-2004",
+   "demo": false
+  },
+  {
+   "id": "AL092004",
+   "name": "Ivan",
+   "year": 2004,
+   "slug": "ivan-2004",
+   "demo": false
+  },
+  {
+   "id": "AL122005",
+   "name": "Katrina",
+   "year": 2005,
+   "slug": "katrina-2005",
+   "demo": true
+  },
+  {
+   "id": "AL182005",
+   "name": "Rita",
+   "year": 2005,
+   "slug": "rita-2005",
+   "demo": false
+  },
+  {
+   "id": "AL252005",
+   "name": "Wilma",
+   "year": 2005,
+   "slug": "wilma-2005",
+   "demo": false
+  },
+  {
+   "id": "AL072008",
+   "name": "Gustav",
+   "year": 2008,
+   "slug": "gustav-2008",
+   "demo": false
+  },
+  {
+   "id": "AL092008",
+   "name": "Ike",
+   "year": 2008,
+   "slug": "ike-2008",
+   "demo": false
+  },
+  {
+   "id": "AL092011",
+   "name": "Irene",
+   "year": 2011,
+   "slug": "irene-2011",
+   "demo": false
+  },
+  {
+   "id": "AL092012",
+   "name": "Isaac",
+   "year": 2012,
+   "slug": "isaac-2012",
+   "demo": false
+  },
+  {
+   "id": "AL182012",
+   "name": "Sandy",
+   "year": 2012,
+   "slug": "sandy-2012",
+   "demo": false
+  },
+  {
+   "id": "AL142016",
+   "name": "Matthew",
+   "year": 2016,
+   "slug": "matthew-2016",
+   "demo": false
+  },
+  {
+   "id": "AL092017",
+   "name": "Harvey",
+   "year": 2017,
+   "slug": "harvey-2017",
+   "demo": false
+  },
+  {
+   "id": "AL112017",
+   "name": "Irma",
+   "year": 2017,
+   "slug": "irma-2017",
+   "demo": false
+  },
+  {
+   "id": "AL062018",
+   "name": "Florence",
+   "year": 2018,
+   "slug": "florence-2018",
+   "demo": false
+  },
+  {
+   "id": "AL142018",
+   "name": "Michael",
+   "year": 2018,
+   "slug": "michael-2018",
+   "demo": false
+  },
+  {
+   "id": "AL132020",
+   "name": "Laura",
+   "year": 2020,
+   "slug": "laura-2020",
+   "demo": false
+  },
+  {
+   "id": "AL192020",
+   "name": "Sally",
+   "year": 2020,
+   "slug": "sally-2020",
+   "demo": false
+  },
+  {
+   "id": "AL092021",
+   "name": "Ida",
+   "year": 2021,
+   "slug": "ida-2021",
+   "demo": false
+  },
+  {
+   "id": "AL092022",
+   "name": "Ian",
+   "year": 2022,
+   "slug": "ian-2022",
+   "demo": true
+  },
+  {
+   "id": "AL102023",
+   "name": "Idalia",
+   "year": 2023,
+   "slug": "idalia-2023",
+   "demo": false
+  },
+  {
+   "id": "AL022024",
+   "name": "Beryl",
+   "year": 2024,
+   "slug": "beryl-2024",
+   "demo": false
+  },
+  {
+   "id": "AL092024",
+   "name": "Helene",
+   "year": 2024,
+   "slug": "helene-2024",
+   "demo": true
+  },
+  {
+   "id": "AL142024",
+   "name": "Milton",
+   "year": 2024,
+   "slug": "milton-2024",
+   "demo": false
+  }
+ ]
+}

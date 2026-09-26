@@ -1,15 +1,5 @@
-import { readFileSync } from "node:fs";
-import {
-  allocate,
-  type Allocation,
-  type AllocationParams,
-  DEFAULT_ALLOCATION,
-  type Impact,
-  impactsAt,
-  sampleTrack,
-  type Storm,
-  type StormState,
-} from "@rescu/aid-model";
+import { existsSync, readFileSync } from "node:fs";
+import { type Impact, impactsAt, sampleTrack, type Storm, type StormState } from "@rescu/aid-model";
 
 export const OUT_DIR = new URL("../out/", import.meta.url);
 export const REPO_ROOT = new URL("../../", import.meta.url);
@@ -100,25 +90,55 @@ export function readTracts(): TractRow[] {
   });
 }
 
-export function readStorms(): Storm[] {
-  return JSON.parse(readFileSync(new URL("storms.json", OUT_DIR), "utf8")) as Storm[];
+export type StormWithFlag = Storm & { demo: boolean };
+
+export function readStorms(): StormWithFlag[] {
+  return JSON.parse(readFileSync(new URL("storms.json", OUT_DIR), "utf8")) as StormWithFlag[];
+}
+
+/** Distance to the ocean coast per tract (km, capped at 200), from prep/coast_distance.py. */
+export function readCoastDistance(): Map<string, number> {
+  const [, ...lines] = readFileSync(new URL("coast.csv", OUT_DIR), "utf8").trim().split(/\r?\n/);
+  return new Map(lines.map((l) => {
+    const [geoid, km] = l.split(",");
+    return [geoid!, Number(km)];
+  }));
+}
+
+/** Observed storm-total rain per tract (inches), from pipeline/rain.ts. Missing = no rain. */
+export function readObservedRain(slug: string): Map<string, number> {
+  const file = new URL(`rain/${slug}.csv`, OUT_DIR);
+  if (!existsSync(file)) throw new Error(`no rain for ${slug}; run pnpm --filter @rescu/data rain`);
+  const [, ...lines] = readFileSync(file, "utf8").trim().split(/\r?\n/);
+  return new Map(lines.map((l) => {
+    const [geoid, mm] = l.split(",");
+    return [geoid!, Number(mm) / 25.4];
+  }));
+}
+
+export interface FemaStorm {
+  name: string;
+  disasters: string[];
+  iaCounties: string[];
+  ihp: Record<string, { registrations: number; approved: number; amount: number }>;
+  unmatchedApproved: number;
+}
+
+export function readFema(): Record<string, FemaStorm> {
+  return JSON.parse(readFileSync(new URL("fema.json", OUT_DIR), "utf8"));
 }
 
 export interface StormRun {
   storm: Storm;
   states: StormState[];
   impacts: Impact[];
-  allocation: Allocation;
   ms: number;
 }
 
-export function runStorm(storm: Storm, tracts: TractRow[], params: AllocationParams = DEFAULT_ALLOCATION): StormRun {
+/** Wind impact of one storm over the given tracts. */
+export function runStorm(storm: Storm, tracts: { lat: number; lon: number }[]): StormRun {
   const t0 = performance.now();
   const states = sampleTrack(storm, 600);
   const impacts = impactsAt(states, tracts);
-  const allocation = allocate(
-    tracts.map((t, i) => ({ households: t.households, svi: t.svi, band: impacts[i]!.band })),
-    params,
-  );
-  return { storm, states, impacts, allocation, ms: performance.now() - t0 };
+  return { storm, states, impacts, ms: performance.now() - t0 };
 }

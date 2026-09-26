@@ -1,4 +1,4 @@
-"""Extracts the three demo storms from NOAA HURDAT2 into data/out/storms.json.
+"""Extracts the storms in data/config/storms.json from NOAA HURDAT2 into data/out/storms.json.
 
 Radii are nautical miles per quadrant in NE, SE, SW, NW order; -999 (missing) becomes null.
 """
@@ -10,11 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "raw" / "hurdat2.txt"
 OUT = ROOT / "out" / "storms.json"
 
-STORMS = {
-    "AL092024": ("helene-2024", "Helene"),
-    "AL092022": ("ian-2022", "Ian"),
-    "AL122005": ("katrina-2005", "Katrina"),
-}
+CONFIG = json.loads((ROOT / "config" / "storms.json").read_text())["storms"]
+STORMS = {s["id"]: s for s in CONFIG}
 
 
 def num(field: str) -> int | None:
@@ -41,8 +38,8 @@ def parse() -> list[dict]:
             remaining = count
             current = None
             if storm_id in STORMS:
-                slug, name = STORMS[storm_id]
-                current = {"id": storm_id, "slug": slug, "name": name, "year": int(storm_id[4:]), "points": []}
+                c = STORMS[storm_id]
+                current = {"id": storm_id, "slug": c["slug"], "name": c["name"], "year": c["year"], "demo": c["demo"], "points": []}
                 storms.append(current)
             continue
         remaining -= 1
@@ -81,5 +78,5 @@ if __name__ == "__main__":
     OUT.write_text(json.dumps(storms, indent=1))
     for s in storms:
         peak = max(p["vmax"] or 0 for p in s["points"])
-        print(f"{s['name']:8} {len(s['points'])} points, peak {peak} kt, {len(s['landfalls'])} landfalls")
+        print(f"{s['name']:9}{s['year']} {len(s['points']):3} points, peak {peak:3} kt, {len(s['landfalls'])} landfalls{'  (demo)' if s['demo'] else ''}")
     print(f"wrote {OUT.relative_to(ROOT.parent)}")
