@@ -105,6 +105,11 @@ export class Grok {
     return this.ledger.spentUsd;
   }
 
+  /** Re-reads the shared ledger (other processes may have spent since). */
+  refresh() {
+    this.ledger = this.load();
+  }
+
   get remainingUsd() {
     return Math.max(0, this.limitUsd - this.ledger.spentUsd - this.reservedUsd);
   }
@@ -132,6 +137,7 @@ export class Grok {
     const maxTokens = req.maxTokens ?? 600;
     const chars = JSON.stringify(req.messages).length + JSON.stringify(req.tools ?? []).length;
     const worst = ((chars / 3) * pin + maxTokens * pout) / 1e6;
+    this.refresh();
     if (this.ledger.spentUsd + this.reservedUsd + worst > this.limitUsd) {
       throw new GrokUnavailable("spend_limit", `Grok spend limit reached ($${this.ledger.spentUsd.toFixed(2)} of $${this.limitUsd})`);
     }
@@ -182,6 +188,8 @@ export class Grok {
   private charge(purpose: GrokPurpose, model: string, input: number, cached: number, output: number): number {
     const [pin, pcached, pout] = price(model);
     const usd = ((input - cached) * pin + cached * pcached + output * pout) / 1e6;
+    // Several server processes can share the ledger (dev): add to what's on disk, not our stale copy.
+    this.ledger = this.load();
     const l = this.ledger;
     l.spentUsd += usd;
     l.calls++;

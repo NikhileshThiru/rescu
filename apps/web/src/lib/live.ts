@@ -16,6 +16,7 @@ import {
   WS_PATH,
 } from "@rescu/live";
 import { useSyncExternalStore } from "react";
+import { serverOverride } from "./api";
 import type { ClockDriver } from "./clock";
 
 export type LinkStatus = "connecting" | "open" | "closed";
@@ -47,6 +48,8 @@ const HEAD_SNAP_SECS = 90;
 const SEEK_DEBOUNCE_MS = 220;
 
 export function liveUrl(): string {
+  const override = serverOverride();
+  if (override) return `${override.replace(/^http/, "ws")}${WS_PATH}`;
   const env = process.env.NEXT_PUBLIC_WS_URL;
   if (env) return env;
   const proto = window.location.protocol === "https:" ? "wss" : "ws";

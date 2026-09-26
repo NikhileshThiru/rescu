@@ -2,8 +2,26 @@
 
 import type { ApiError, ApiRoutes } from "@rescu/live";
 
-/** The sim server's HTTP base: NEXT_PUBLIC_API_URL, else port 4000 on the page's host (works from a phone on the LAN). */
+/**
+ * Dev override: `?server=4200` (a port on this host) or `?server=http://host:4200` points every
+ * page at another sim server; remembered for the tab (sessionStorage).
+ */
+export function serverOverride(): string | null {
+  try {
+    const q = new URLSearchParams(window.location.search).get("server");
+    if (q) sessionStorage.setItem("rescu.server", q);
+    const v = q ?? sessionStorage.getItem("rescu.server");
+    if (!v) return null;
+    return /^\d+$/.test(v) ? `${window.location.protocol}//${window.location.hostname}:${v}` : v.replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+/** The sim server's HTTP base: the dev override, NEXT_PUBLIC_API_URL, else port 4000 on the page's host (works from a phone on the LAN). */
 export function apiBase(): string {
+  const override = serverOverride();
+  if (override) return override;
   const env = process.env.NEXT_PUBLIC_API_URL;
   if (env) return env.replace(/\/$/, "");
   return `${window.location.protocol}//${window.location.hostname}:4000`;
