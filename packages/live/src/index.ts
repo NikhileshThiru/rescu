@@ -1,7 +1,17 @@
 /**
- * Wire protocol between the sim server (apps/server) and the web app. JSON over one WebSocket.
+ * The shared contract between the sim server (apps/server) and the web app: the live wire
+ * protocol (JSON over one WebSocket) in this file, the Relief Market (market.ts), the oracle
+ * (oracle.ts), "Try to break it" (breakit.ts) and every REST route (api.ts).
  * The server owns sim time while a run is live; clients interpolate from `ClockState`.
  */
+import type { FeedOrigin, MerchantCategory } from "./market";
+import type { OracleCase, StoreState } from "./oracle";
+
+export * from "./api";
+export * from "./base58";
+export * from "./breakit";
+export * from "./market";
+export * from "./oracle";
 
 /** The server's clock, anchored at server wall time `at`. */
 export interface ClockState {
@@ -84,7 +94,8 @@ export interface SpendSeries {
   aidUsd: number[];
 }
 
-export type FeedKind = "aid" | "payment" | "blocked" | "fund" | "clawback";
+/** "oracle" = a suspension/freeze sent by the oracle key; "join" = aid landed for someone who registered on their phone. */
+export type FeedKind = "aid" | "payment" | "blocked" | "fund" | "clawback" | "oracle" | "join";
 
 export interface FeedItem {
   kind: FeedKind;
@@ -96,9 +107,9 @@ export interface FeedItem {
   /** On-chain rule name when rejected. */
   rule: string | null;
   latencyMs: number;
+  /** Who started it; absent = the sim's own households. */
+  origin?: FeedOrigin;
 }
-
-export type MerchantCategory = "pharmacy" | "grocery" | "hardware" | "general";
 
 export interface MerchantDot {
   idx: number;
@@ -111,12 +122,35 @@ export interface MerchantDot {
   reopensAt: number | null;
 }
 
+/**
+ * Something a person, an agent or the oracle did, never sampled away: an app order's arc from
+ * home to store, a phone's aid landing, a store being suspended.
+ */
+export interface Spotlight {
+  kind: "order" | "join" | "oracle";
+  ok: boolean;
+  /** [lon, lat]: home for orders and joins, the store for oracle actions. */
+  from: [number, number];
+  /** [lon, lat] of the store for orders; null otherwise. */
+  to: [number, number] | null;
+  usd: number;
+  /** "Maria · Bottled water x2 via Grok", "Riverside Grocery suspended". */
+  label: string;
+  rule: string | null;
+  merchant: number | null;
+  resident: number | null;
+  origin: FeedOrigin;
+  signature: string | null;
+}
+
 export interface LiveBatch {
   /** Aid that landed per hex (H3 res 5) since the last batch. */
   aid: { h3: string; usd: number; households: number }[];
   /** A capped sample of payments since the last batch, for arcs: [lon, lat] pairs. */
   pays: { from: [number, number]; to: [number, number]; usd: number; ok: boolean; merchant: number }[];
   feed: FeedItem[];
+  /** Every app/agent/oracle event since the last batch (uncapped; there are few). */
+  spotlight: Spotlight[];
 }
 
 export type ServerMsg =
@@ -128,6 +162,14 @@ export type ServerMsg =
   | { type: "kpis"; runId: string; kpis: Kpis }
   | { type: "series"; runId: string; series: SpendSeries }
   | { type: "batch"; runId: string; batch: LiveBatch }
+  /** Every oracle case of the run (on connect and when a run starts). */
+  | { type: "cases"; runId: string; cases: OracleCase[] }
+  /** One case opened or changed. */
+  | { type: "case"; runId: string; case: OracleCase }
+  /** Stores whose state isn't plain "approved, not flagged" (on connect and when a run starts). */
+  | { type: "stores"; runId: string; states: StoreState[] }
+  /** One store's status or flag changed (suspended stores draw red, flagged amber). */
+  | { type: "store"; runId: string; state: StoreState }
   | { type: "pong"; client: number; server: number }
   | { type: "error"; message: string };
 

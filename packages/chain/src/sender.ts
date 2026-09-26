@@ -6,6 +6,7 @@ import {
   type TransactionError,
   type TransactionInstruction,
   TransactionMessage,
+  VersionedMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
 import { type DecodedChainError, decodeTransactionError } from "./errors.js";
@@ -46,6 +47,14 @@ function nativeKey(kp: Keypair): KeyObject {
     keyObjects.set(kp, key);
   }
   return key;
+}
+
+/** A transaction built and partly signed here, waiting for an outside signature (a resident's phone). */
+export interface PreparedTx {
+  message: Buffer;
+  lastValidBlockHeight: number;
+  /** Keys that must sign, in order (the fee payer first). */
+  signers: string[];
 }
 
 interface Pending {
@@ -100,6 +109,46 @@ export class TxSender {
         this.refreshing = undefined;
       });
     return this.refreshing;
+  }
+
+  /** Builds a legacy message for an outside signer (the fee payer and `signers` sign at submit). */
+  async prepare(instructions: TransactionInstruction[]): Promise<PreparedTx> {
+    const { blockhash, lastValidBlockHeight } = await this.latestBlockhash();
+    const message = new TransactionMessage({
+      payerKey: this.feePayer.publicKey,
+      recentBlockhash: blockhash,
+      instructions,
+    }).compileToLegacyMessage();
+    const n = message.header.numRequiredSignatures;
+    return {
+      message: Buffer.from(message.serialize()),
+      lastValidBlockHeight,
+      signers: message.accountKeys.slice(0, n).map((k) => k.toBase58()),
+    };
+  }
+
+  /**
+   * Sends a prepared message once the outside signature is in: the fee payer and `signers` sign
+   * here; `external` maps base58 key -> 64-byte signature. Throws if a required signature is missing
+   * or doesn't verify.
+   */
+  async submitPrepared(p: PreparedTx, signers: Keypair[], external: Record<string, Uint8Array>): Promise<SubmitResult> {
+    const message = VersionedMessage.deserialize(p.message);
+    const tx = new VersionedTransaction(message);
+    const own = new Map([this.feePayer, ...signers].map((k) => [k.publicKey.toBase58(), k]));
+    for (const key of p.signers) {
+      const kp = own.get(key);
+      const sig = kp ? sign(null, p.message, nativeKey(kp)) : external[key];
+      if (!sig || sig.length !== 64) throw new Error(`missing signature for ${key}`);
+      tx.addSignature(kp ? kp.publicKey : message.staticAccountKeys.find((k) => k.toBase58() === key)!, sig);
+    }
+    const raw = Buffer.from(tx.serialize());
+    const sentAt = Date.now();
+    const signature = await this.connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 });
+    return new Promise<SubmitResult>((resolve, reject) => {
+      this.pending.set(signature, { raw, sentAt, lastSentAt: sentAt, lastValidBlockHeight: p.lastValidBlockHeight, resolve, reject });
+      this.schedule();
+    });
   }
 
   async submit(instructions: TransactionInstruction[], signers: Keypair[] = []): Promise<SubmitResult> {

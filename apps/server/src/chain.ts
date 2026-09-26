@@ -2,7 +2,9 @@ import {
   createConnection,
   decodeChainError,
   type MerchantCategory,
+  type MerchantStatusName,
   paymentInstruction,
+  type PreparedTx,
   RescuClient,
   reliefAta,
   type SubmitResult,
@@ -119,7 +121,7 @@ export class ChainRunner {
   }
 
   /** Sends one relayer transaction, retrying once if it expired unconfirmed (validator overloaded). */
-  private async relayed(ixs: TransactionInstruction[], signers: Keypair[] = [this.admin]): Promise<SendResult> {
+  async relayed(ixs: TransactionInstruction[], signers: Keypair[] = [this.admin]): Promise<SendResult> {
     const r = await this.submit(this.relayerSender, ixs, signers);
     if (!r.ok && r.signature === null) return this.submit(this.relayerSender, ixs, signers);
     return r;
@@ -221,6 +223,77 @@ export class ChainRunner {
     });
     const sender = this.payers[this.rr++ % this.payers.length]!;
     return this.submit(sender, [ix], [p.resident]);
+  }
+
+  // ---------- people and agents (the resident app, Grok, MCP) ----------
+
+  /** A payment from `owner`'s relief account, signed by `authority` (the resident, or the agent key as SPL delegate). */
+  payAs(p: { mint: PublicKey; owner: PublicKey; authority: Keypair; merchant: PublicKey; cents: number; destination?: PublicKey }) {
+    const ix = paymentInstruction({
+      mint: p.mint,
+      source: reliefAta(p.owner, p.mint),
+      destinationOwner: p.merchant,
+      destination: p.destination,
+      authority: p.authority.publicKey,
+      amount: centsToBase(p.cents),
+    });
+    const sender = this.payers[this.rr++ % this.payers.length]!;
+    return this.submit(sender, [ix], [p.authority]);
+  }
+
+  /** The same payment for a key that lives on a phone: the relayer pays the fee, the phone signs the message. */
+  preparePay(p: { mint: PublicKey; owner: PublicKey; merchant: PublicKey; cents: number }): Promise<PreparedTx> {
+    const ix = paymentInstruction({
+      mint: p.mint,
+      source: reliefAta(p.owner, p.mint),
+      destinationOwner: p.merchant,
+      authority: p.owner,
+      amount: centsToBase(p.cents),
+    });
+    return this.relayerSender.prepare([ix]);
+  }
+
+  /** The resident lets the agent key spend up to `cents` (SPL delegate); 0 revokes by approving zero. */
+  approveAgent(mint: PublicKey, owner: Keypair, cents: number) {
+    const ix = this.client.approveAgentInstruction(owner.publicKey, mint, this.keys.agent.publicKey, centsToBase(cents));
+    return this.relayed([ix], [owner]);
+  }
+
+  prepareApprove(mint: PublicKey, owner: PublicKey, cents: number): Promise<PreparedTx> {
+    return this.relayerSender.prepare([this.client.approveAgentInstruction(owner, mint, this.keys.agent.publicKey, centsToBase(cents))]);
+  }
+
+  /** Sends a prepared transaction once the phone's signature is in. */
+  async submitPrepared(prepared: PreparedTx, external: Record<string, Uint8Array>): Promise<SendResult> {
+    const t0 = Date.now();
+    try {
+      return await this.relayerSender.submitPrepared(prepared, [], external);
+    } catch (err) {
+      return { ok: false, signature: null, decoded: decodeChainError(err) ?? { name: "SendFailed", message: String((err as Error).message ?? err) }, latencyMs: Date.now() - t0, slot: 0, err };
+    }
+  }
+
+  /** Registers one household mid-run ("I live here"): its relief account + wallet state, rent paid by the relayer. */
+  async enrollOne(mint: PublicKey, owner: PublicKey, householdId: number) {
+    const ixs = await this.client.enrollInstructions(this.admin.publicKey, mint, owner, BigInt(householdId));
+    return this.relayed(ixs);
+  }
+
+  /** The oracle key suspends or reinstates a store. */
+  async setStoreStatus(mint: PublicKey, owner: PublicKey, status: MerchantStatusName) {
+    const ix = await this.client.setMerchantStatusInstruction(this.keys.oracle.publicKey, mint, owner, status);
+    return this.relayed([ix], [this.keys.oracle]);
+  }
+
+  /** The oracle key freezes or thaws a resident's relief account. */
+  async setWalletFrozen(mint: PublicKey, owner: PublicKey, frozen: boolean) {
+    const ix = await this.client.setWalletFrozenInstruction(this.keys.oracle.publicKey, mint, owner, frozen);
+    return this.relayed([ix], [this.keys.oracle]);
+  }
+
+  /** Balance, delegate allowance and frozen flag, straight from the chain. */
+  tokenAccount(owner: PublicKey, mint: PublicKey) {
+    return this.client.tokenAccount(owner, mint);
   }
 
   async clawback(mint: PublicKey, owners: PublicKey[], onDone: Batched, signal?: AbortSignal) {

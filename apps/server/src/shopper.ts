@@ -91,6 +91,15 @@ export class Households {
     this.ringAt[h] = (k + 1) % PLAN.ring;
   }
 
+  /** Landed or in-flight spending recorded after sim time `since` (the ring holds the last few orders). */
+  spentSince(h: number, since: number): number {
+    let cents = 0;
+    for (let k = 0; k < PLAN.ring; k++) {
+      if (this.ringT[h * PLAN.ring + k]! > since) cents += this.ringC[h * PLAN.ring + k]!;
+    }
+    return cents;
+  }
+
   /** A rejected order didn't count toward the window after all. */
   forget(h: number, t: number, cents: number) {
     for (let k = 0; k < PLAN.ring; k++) {

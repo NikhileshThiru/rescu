@@ -1,5 +1,5 @@
 import { allocate, autoDeclareCounties, DEFAULT_NEED_MODEL, type Storm } from "@rescu/aid-model";
-import { aidArrival, type MerchantCategory, timelineDomain } from "@rescu/live";
+import { aidArrival, type MerchantCategory, type PlantedKind, timelineDomain } from "@rescu/live";
 import { latLngToCell } from "h3-js";
 import { merchantName } from "./names.js";
 import { Rng } from "./rng.js";
@@ -32,6 +32,19 @@ const CATEGORY_WEIGHTS = [0.2, 0.32, 0.2, 0.28];
 export const NEAR_K = 3;
 /** Rule-breakers: try a generator over the order cap, a buying spree past the daily cap, an unregistered store, or reselling aid. */
 export const ROGUE = { none: 0, generator: 1, spree: 2, unregistered: 3, resale: 4 } as const;
+/**
+ * Planted fraud the chain can't see (the oracle's job, not the transfer hook's): several
+ * households registered with the same device/phone/address, residents trading aid for cash at a
+ * colluding store, and residents who spend unusually fast. Planted in `buildWorld`.
+ */
+export const FRAUD = { none: 0, duplicate: 1, collusion: 2, velocity: 3 } as const;
+
+/** Ground truth for the oracle's scorecard (`GET /api/oracle/metrics`). Never shown as a hint in the UI. */
+export interface Planted {
+  kind: PlantedKind;
+  merchants: number[];
+  residents: number[];
+}
 
 export interface World {
   slug: string;
@@ -58,6 +71,16 @@ export interface World {
     rogue: Uint8Array;
     /** NEAR_K nearest merchant indices per category (CATEGORIES order), -1 = none. */
     near: Int16Array;
+    /** "Maria G." (deterministic per storm). */
+    name: string[];
+    /** Mock ID check at registration: device id, phone, street address. Planted duplicates share one. */
+    device: string[];
+    phone: string[];
+    address: string[];
+    /** FRAUD kind per household (0 = honest). */
+    fraud: Uint8Array;
+    /** Collusion: the store this household trades its aid at, -1 = none. */
+    colludeWith: Int16Array;
   };
   merchants: {
     n: number;
@@ -70,7 +93,15 @@ export interface World {
     /** Closed by the storm from/until these sim times; NaN = never closed. */
     closedFrom: Float64Array;
     reopensAt: Float64Array;
+    /** Planted gouging: price multiplier (1 = honest) applied from `gougeFrom` (sim time, NaN = never). */
+    gouge: Float32Array;
+    gougeFrom: Float64Array;
   };
+  /** Eligible tracts (for "I live here": the aid a new registration at that spot gets). */
+  tracts: { geoid: string; county: string; lat: number; lon: number; cents: number; households: number }[];
+  /** When aid is due at a res-5 hex (the storm's arrival), unix seconds. */
+  aidDueAt: (h3: string) => number;
+  planted: Planted[];
 }
 
 function jitter(rng: Rng, lat: number, lon: number, km: number): [number, number] {
@@ -136,6 +167,12 @@ export function buildWorld(input: StormInput, tracts: TractInput[], opts: { hous
     svi: new Float32Array(picks.length),
     rogue: new Uint8Array(picks.length),
     near: new Int16Array(picks.length * CATEGORIES.length * NEAR_K).fill(-1),
+    name: [] as string[],
+    device: [] as string[],
+    phone: [] as string[],
+    address: [] as string[],
+    fraud: new Uint8Array(picks.length),
+    colludeWith: new Int16Array(picks.length).fill(-1),
   };
   let budgetCents = 0;
   picks.forEach((ti, k) => {
@@ -157,6 +194,11 @@ export function buildWorld(input: StormInput, tracts: TractInput[], opts: { hous
     H.pet[k] = rng.chance(0.35) ? 1 : 0;
     H.svi[k] = t.svi;
     if (rng.chance(0.01)) H.rogue[k] = 1 + rng.int(0, 3);
+    H.name.push(residentName(rng));
+    H.device.push(`dev_${hex(rng, 12)}`);
+    // Unique per household (planted duplicates are copied over later), so only planted fraud ever matches.
+    H.phone.push(fakePhone(k));
+    H.address.push(`${100 + ((k * 7919) % 99991)} ${STREETS[k % STREETS.length]}, ${t.countyName.replace(/ (County|Parish)$/, "")} ${t.state}`);
   });
 
   // Stores: ~1 per 8,000 residents of the aid area, placed by population in declared counties.
@@ -178,6 +220,8 @@ export function buildWorld(input: StormInput, tracts: TractInput[], opts: { hous
     lat: new Float64Array(mCount),
     closedFrom: new Float64Array(mCount).fill(Number.NaN),
     reopensAt: new Float64Array(mCount).fill(Number.NaN),
+    gouge: new Float32Array(mCount).fill(1),
+    gougeFrom: new Float64Array(mCount).fill(Number.NaN),
   };
   const taken = new Set<string>();
   for (let m = 0; m < mCount; m++) {
@@ -243,6 +287,9 @@ export function buildWorld(input: StormInput, tracts: TractInput[], opts: { hous
     }
   }
 
+  // Planted bad actors for the oracle (gougers, duplicate registrations, collusion, velocity).
+  const planted: Planted[] = [];
+
   return {
     slug: input.storm.slug,
     stormName: `${input.storm.name} ${input.storm.year}`,
@@ -253,7 +300,35 @@ export function buildWorld(input: StormInput, tracts: TractInput[], opts: { hous
     counties,
     households: H,
     merchants: M,
+    tracts: eligible.map(({ t, i }) => ({ geoid: t.geoid, county: t.countyFips, lat: t.lat, lon: t.lon, cents: alloc.cents[i]!, households: t.households })),
+    aidDueAt: arrivalOf,
+    planted,
   };
+}
+
+const FIRST = [
+  "Maria", "James", "Rosa", "Darnell", "Linda", "Tyrone", "Carmen", "Earl", "Keisha", "Tom", "Brenda", "Luis", "Denise",
+  "Marcus", "Patricia", "Andre", "Grace", "Jamal", "Nancy", "Carlos", "Shirley", "Dwayne", "Ana", "Harold", "Tasha",
+  "Wei", "Priya", "Hector", "Ruth", "Omar", "Latoya", "Bill", "Yolanda", "Miguel", "Joan", "Terrence", "Nguyen", "Faith",
+];
+const STREETS = ["Oak St", "Pine Ave", "Magnolia Dr", "Cypress Ln", "Church St", "Main St", "River Rd", "Pecan Way", "Dogwood Ct", "Live Oak Blvd", "Bay St", "Palmetto Ave"];
+const LETTERS = "ABCDEFGHJKLMNPRSTVW";
+
+function residentName(rng: Rng): string {
+  return `${rng.pick(FIRST)} ${LETTERS[rng.int(0, LETTERS.length - 1)]}.`;
+}
+
+function hex(rng: Rng, n: number): string {
+  let s = "";
+  for (let i = 0; i < n; i++) s += rng.int(0, 15).toString(16);
+  return s;
+}
+
+const AREA_CODES = ["229", "352", "850", "912", "828", "706", "239", "504", "228"];
+
+/** Fictional 555 numbers, unique for the first 90,000 households. */
+function fakePhone(k: number): string {
+  return `(${AREA_CODES[k % AREA_CODES.length]}) 555-${String(Math.floor(k / AREA_CODES.length) % 10_000).padStart(4, "0")}`;
 }
 
 export function isOpen(w: World, m: number, t: number): boolean {

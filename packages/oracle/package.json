@@ -1,0 +1,22 @@
+{
+  "name": "@rescu/oracle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The watchdog: gouging, duplicate identity, velocity and collusion detectors plus an isolation-forest anomaly score. Pure TS, no I/O.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rescu/live": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "typescript": "6.0.3",
+    "vitest": "5.0.2"
+  }
+}

@@ -9,18 +9,22 @@
     "start": "tsx src/index.ts",
     "sim": "tsx src/headless.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "smoke": "tsx src/smoke.ts"
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",
+    "@modelcontextprotocol/sdk": "1.30.1",
     "@rescu/aid-model": "workspace:*",
     "@rescu/chain": "workspace:*",
     "@rescu/live": "workspace:*",
+    "@rescu/oracle": "workspace:*",
     "@solana/web3.js": "1.99.0",
     "fastify": "5.12.5",
     "h3-js": "4.5.0",
     "postgres": "3.4.9",
-    "ws": "8.22.0"
+    "ws": "8.22.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/node": "22.20.4",

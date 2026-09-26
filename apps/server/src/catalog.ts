@@ -1,9 +1,8 @@
-import type { MerchantCategory } from "@rescu/live";
+import { type CatalogItem, type MerchantCategory, type Need, NEEDS as CONTRACT_NEEDS } from "@rescu/live";
 
-/** What a purchase is for. Payments are tagged with the basket's main need. */
-export type Need = "water" | "food" | "baby" | "medical" | "power" | "fuel" | "shelter" | "cleanup" | "hygiene" | "pet";
-
-export const NEEDS: Need[] = ["water", "food", "baby", "medical", "power", "fuel", "shelter", "cleanup", "hygiene", "pet"];
+export type { Need };
+/** What a purchase is for (the contract's list). Payments are tagged with the basket's main need. */
+export const NEEDS: Need[] = [...CONTRACT_NEEDS];
 
 export interface Item {
   id: number;
@@ -75,6 +74,9 @@ export const ITEMS: Item[] = RAW.map(([name, need, cents, maxQty, sells], id) =>
 /** Over the $200 per-order cap on purpose: the chain turns these away. */
 export const GENERATOR: Item = { id: ITEMS.length, name: "Portable generator", need: "power", cents: 49_900, maxQty: 1, sells: [H] };
 export const ALL_ITEMS: Item[] = [...ITEMS, GENERATOR];
+
+/** The catalog as the Relief Market serves it (the generator included: hardware stores sell it, the cap stops it). */
+export const CATALOG: CatalogItem[] = ALL_ITEMS.map((i) => ({ id: i.id, name: i.name, need: i.need, baseCents: i.cents, maxQty: i.maxQty, sells: i.sells }));
 
 export const STOCK: Record<MerchantCategory, Item[]> = {
   pharmacy: ITEMS.filter((i) => i.sells.includes("pharmacy")),

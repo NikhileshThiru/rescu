@@ -23,6 +23,8 @@ const FEED_TONE: Record<FeedItem["kind"], "teal" | "red" | "storm" | "amber"> = 
   blocked: "red",
   fund: "teal",
   clawback: "amber",
+  join: "teal",
+  oracle: "amber",
 };
 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;

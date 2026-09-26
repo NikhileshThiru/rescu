@@ -8,9 +8,11 @@ import {
   type Kpis,
   type LiveBatch,
   type MerchantDot,
+  type OracleCase,
   type RunInfo,
   type ServerMsg,
   type SpendSeries,
+  type StoreState,
   WS_PATH,
 } from "@rescu/live";
 import { useSyncExternalStore } from "react";
@@ -30,6 +32,10 @@ export interface LiveState {
   history: boolean;
   /** Last error the server sent back (e.g. "A relief network is live for ..."). */
   error: string | null;
+  /** The oracle's cases for this run, newest first. */
+  cases: OracleCase[];
+  /** Stores whose status/flag isn't the default, by store index (suspended = red dot, flagged = amber). */
+  stores: Record<number, StoreState>;
 }
 
 /** One more than the rail shows, so the row that drops off can fade out. */
@@ -52,7 +58,7 @@ export function liveUrl(): string {
  * offset from ping/pong, an external store for React, and a batch stream for the map.
  */
 export class LiveClient {
-  state: LiveState = { link: "connecting", run: null, kpis: null, series: null, merchants: null, feed: [], history: false, error: null };
+  state: LiveState = { link: "connecting", run: null, kpis: null, series: null, merchants: null, feed: [], history: false, error: null, cases: [], stores: {} };
   /** Called when the server's play state or speed changes (SimClock.driverChanged). */
   onClock: (() => void) | null = null;
 
@@ -259,7 +265,7 @@ export class LiveClient {
         const newRun = !prev || !next || prev.id !== next.id;
         this.set({
           run: next,
-          ...(newRun ? { kpis: null, series: null, feed: [], history: false } : {}),
+          ...(newRun ? { kpis: null, series: null, feed: [], history: false, cases: [], stores: {} } : {}),
         });
         if (newRun) this.feedQueue = [];
         if (next?.phase !== "live" && next?.phase !== "ended") {
@@ -285,6 +291,21 @@ export class LiveClient {
         if (msg.runId !== this.state.run?.id) return;
         for (const item of msg.batch.feed) this.queueFeed(item);
         for (const fn of this.batchListeners) fn(msg.batch, msg.runId);
+        return;
+      case "cases":
+        if (msg.runId === this.state.run?.id) this.set({ cases: [...msg.cases].sort((a, b) => b.openedAt - a.openedAt) });
+        return;
+      case "case": {
+        if (msg.runId !== this.state.run?.id) return;
+        const rest = this.state.cases.filter((c) => c.id !== msg.case.id);
+        this.set({ cases: [msg.case, ...rest].sort((a, b) => b.openedAt - a.openedAt) });
+        return;
+      }
+      case "stores":
+        if (msg.runId === this.state.run?.id) this.set({ stores: Object.fromEntries(msg.states.map((s) => [s.idx, s])) });
+        return;
+      case "store":
+        if (msg.runId === this.state.run?.id) this.set({ stores: { ...this.state.stores, [msg.state.idx]: msg.state } });
         return;
       case "error":
         this.set({ error: msg.message });

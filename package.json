@@ -22,7 +22,9 @@
     "test:server": "pnpm --filter @rescu/server test",
     "web:dev": "pnpm --filter @rescu/web dev",
     "web:build": "pnpm --filter @rescu/web build",
-    "web:data": "pnpm --filter @rescu/data export-web"
+    "web:data": "pnpm --filter @rescu/data export-web",
+    "smoke": "pnpm --filter @rescu/server smoke",
+    "test:oracle": "pnpm --filter @rescu/oracle test"
   },
   "devDependencies": {
     "@types/node": "22.20.4",

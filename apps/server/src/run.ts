@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { DEFAULT_RULES, declarationPda, mintPda, REJECTION_COPY } from "@rescu/chain";
-import type { FeedItem, LiveBatch, MerchantDot, RunInfo, RunPhase } from "@rescu/live";
+import type { FeedItem, FeedOrigin, LiveBatch, MerchantDot, OrderLine, PayerKind, RunInfo, RunPhase, Spotlight, StoreState } from "@rescu/live";
 import type { Keypair, PublicKey } from "@solana/web3.js";
 import { ALL_ITEMS } from "./catalog.js";
 import type { ChainRunner, SendResult } from "./chain.js";
@@ -12,6 +12,12 @@ import { Households, type Order, ROGUE_STORES, Shopper } from "./shopper.js";
 import type { ChainTxRow, Tiger } from "./tiger.js";
 import { merchantKey, residentKey, rogueStoreKey } from "./wallets.js";
 import { countyLabel, type World } from "./world.js";
+import { Activity } from "./network/activity.js";
+import { ApiFail } from "./network/errors.js";
+import type { NetworkEvents } from "./network/events.js";
+import { Market } from "./network/market.js";
+import { Orders } from "./network/orders.js";
+import { type AppResident, Residents } from "./network/residents.js";
 
 const HOUR = 3600;
 /** Households per disburse transaction (measured: 11 fit in 1,232 bytes, ~55k CU). */
@@ -52,15 +58,35 @@ export interface RunStats {
 
 type Destination = { owner: PublicKey; name: string; category: string; h3: string; lonLat: [number, number] };
 
+/** What an app payment came to (the order, the relay and MCP all report this). */
+export interface AppPayResult {
+  ok: boolean;
+  signature: string | null;
+  rule: string | null;
+  message: string | null;
+  latencyMs: number;
+}
+
+export interface AppPayment {
+  resident: AppResident;
+  store: number;
+  lines: OrderLine[];
+  cents: number;
+  payer: PayerKind;
+  origin: FeedOrigin;
+  orderId: string | null;
+}
+
 interface Batch {
   aid: Map<string, { usd: number; households: number }>;
   pays: LiveBatch["pays"];
   paysSeen: number;
   feed: FeedItem[];
+  spotlight: Spotlight[];
   counts: { aid: number; payment: number; blocked: number };
 }
 
-const emptyBatch = (): Batch => ({ aid: new Map(), pays: [], paysSeen: 0, feed: [], counts: { aid: 0, payment: 0, blocked: 0 } });
+const emptyBatch = (): Batch => ({ aid: new Map(), pays: [], paysSeen: 0, feed: [], spotlight: [], counts: { aid: 0, payment: 0, blocked: 0 } });
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
 /**
@@ -69,7 +95,7 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
  * From then on the server's clock drives it: aid lands as the storm reaches each hex, households
  * shop, and every transaction is recorded in Tiger as it confirms.
  */
-export class Run extends EventEmitter<{ info: []; clock: [] }> {
+export class Run extends EventEmitter<NetworkEvents> {
   readonly id: bigint;
   readonly key: string;
   readonly mint: PublicKey;
@@ -82,11 +108,32 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
   fundSignature: string | null = null;
   readonly stats: RunStats = { aidHouseholds: 0, aidCents: 0, aidFailed: 0, payments: 0, spentCents: 0, blocked: 0, blockedBy: {}, dropped: 0, returnedCents: 0 };
 
-  private residents: Keypair[] = [];
-  private merchantKeys: Keypair[] = [];
+  /** Sim household keys (server custody), by household index. */
+  readonly residentKeys: Keypair[] = [];
+  readonly merchantKeys: Keypair[] = [];
   private rogueStores: Keypair[] = [];
-  private readonly enrolled: Uint8Array;
-  private readonly hh: Households;
+  /** 1 = registered on-chain. */
+  readonly enrolled: Uint8Array;
+  /** Per-household spending state of the sim's shoppers. */
+  readonly hh: Households;
+  /** Prices, stock, store status and oracle flags. */
+  readonly market: Market;
+  /** Per-store recent events for the merchant terminal. */
+  readonly activity: Activity;
+  /** Personas, "I live here" registrations, wallets and phone signatures. */
+  readonly people: Residents;
+  readonly orders: Orders;
+  /** The declaration's budget on-chain (the sim's sample, plus everyone who joined from a phone). */
+  budgetCents: number;
+  /** Aid landings by household (sim and joined): the transaction and time to aid. */
+  readonly aidLog = new Map<number, { signature: string; simT: number; timeToAidMs: number }>();
+  /** Households whose relief account the oracle froze. */
+  readonly frozen = new Set<number>();
+  /** Households an open oracle case names -> case id. */
+  readonly residentCase = new Map<number, string>();
+  private appAidQ: AppResident[] = [];
+  private paySeq = 0;
+  private budgetOp: Promise<unknown> = Promise.resolve();
   private readonly shopper: Shopper;
   private readonly rng: Rng;
   private readonly heap: TimeHeap;
@@ -120,8 +167,8 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
 
   constructor(
     readonly world: World,
-    private readonly chain: ChainRunner,
-    private readonly tiger: Tiger,
+    readonly chain: ChainRunner,
+    readonly tiger: Tiger,
   ) {
     super();
     this.id = BigInt(Date.now());
@@ -136,6 +183,11 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
     this.heap = new TimeHeap(n * 2);
     this.enrolled = new Uint8Array(n).fill(1);
     this.aidTries = new Uint8Array(n);
+    this.budgetCents = world.budgetCents;
+    this.market = new Market(world, (m) => this.merchantKeys[m]?.publicKey.toBase58() ?? "", `${world.slug}:${this.key}`);
+    this.activity = new Activity(world.merchants.n);
+    this.people = new Residents(this);
+    this.orders = new Orders(this);
     const due = world.households.aidDue;
     this.dueOrder = Int32Array.from({ length: n }, (_, i) => i).sort((a, b) => due[a]! - due[b]!);
   }
@@ -156,7 +208,7 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
       households: W.households.n,
       fullScaleHouseholds: W.fullScale.eligibleHouseholds,
       merchants: W.merchants.n,
-      budgetUsd: W.budgetCents / 100,
+      budgetUsd: this.budgetCents / 100,
       funded: this.funded,
       fundSignature: this.fundSignature,
       mint: this.mint.toBase58(),
@@ -183,12 +235,13 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
   /** Everything that happened since the last call (aid per hex, sampled payments, feed rows). */
   drainBatch(): LiveBatch | null {
     const b = this.batch;
-    if (!b.aid.size && !b.pays.length && !b.feed.length) return null;
+    if (!b.aid.size && !b.pays.length && !b.feed.length && !b.spotlight.length) return null;
     this.batch = emptyBatch();
     return {
       aid: [...b.aid].map(([h3, v]) => ({ h3, usd: round2(v.usd), households: v.households })),
       pays: b.pays,
       feed: b.feed,
+      spotlight: b.spotlight,
     };
   }
 
@@ -211,7 +264,7 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
       await this.chain.ensureFunds();
 
       this.setProgress("Creating wallets", 0, H.n, true);
-      for (let i = 0; i < H.n; i++) this.residents.push(residentKey(config.seed, W.slug, i));
+      for (let i = 0; i < H.n; i++) this.residentKeys.push(residentKey(config.seed, W.slug, i));
       for (let i = 0; i < M.n; i++) this.merchantKeys.push(merchantKey(config.seed, this.id, i));
       for (let i = 0; i < ROGUE_STORES; i++) this.rogueStores.push(rogueStoreKey(config.seed, this.id, i));
       if (this.disposed) return;
@@ -234,7 +287,7 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
       // The run's households and stores go to Tiger while the chain registers them.
       const saving = Promise.all([
         this.tiger.insertMerchants(this.key, { ...M, owner: this.merchantKeys.map((k) => k.publicKey.toBase58()) }),
-        this.tiger.insertHouseholds(this.key, { ...H, owner: this.residents.map((k) => k.publicKey.toBase58()) }),
+        this.tiger.insertHouseholds(this.key, { ...H, owner: this.residentKeys.map((k) => k.publicKey.toBase58()) }),
       ]);
       saving.catch(() => {});
 
@@ -262,7 +315,7 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
       this.setProgress("Registering households", 0, H.n, true);
       const householdsFailed = await this.chain.enroll(
         this.mint,
-        this.residents.map((kp, i) => ({ owner: kp.publicKey, householdId: i })),
+        this.residentKeys.map((kp, i) => ({ owner: kp.publicKey, householdId: i })),
         (k, r, first) => {
           this.staged("enroll", r, k);
           if (!r.ok) this.enrolled.fill(0, first, first + k);
@@ -328,8 +381,9 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
     this.emit("info");
     this.emit("clock");
 
-    const r = await this.chain.fund(this.mint, this.world.budgetCents);
-    this.record("fund", r, 0, this.world.budgetCents);
+    const budget = this.budgetCents;
+    const r = await this.chain.fund(this.mint, budget);
+    this.record("fund", r, 0, budget);
     if (!r.ok || this.disposed) {
       this.phase = "ready";
       this.error = `Funding failed: ${r.decoded?.message ?? "unknown error"}`;
@@ -342,7 +396,7 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
       kind: "fund",
       signature: r.signature!,
       simT: this.clock.now(),
-      usd: this.world.budgetCents / 100,
+      usd: budget / 100,
       title: "Treasury funded",
       detail: `${this.world.households.n.toLocaleString("en-US")} households enrolled in ${this.world.fullScale.declaredCounties} declared counties`,
       rule: null,
@@ -468,6 +522,13 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
       this.aidDueMs.push(Math.max(this.declaredMs, this.clock.wallTimeOf(due)));
     }
     this.dispatchAid();
+    if (this.appAidQ.length && this.funded) {
+      const due = this.appAidQ.filter((r) => r.aidDue <= t);
+      if (due.length) {
+        this.appAidQ = this.appAidQ.filter((r) => r.aidDue > t);
+        for (const r of due) void this.disburseApp(r);
+      }
+    }
 
     if (this.closing) return;
     if (t >= this.clock.end) {
@@ -536,7 +597,7 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
     this.aidInFlight++;
     const r = await this.chain.disburse(
       this.mint,
-      hs.map((h) => ({ owner: this.residents[h]!.publicKey, cents: H.aidCents[h]! })),
+      hs.map((h) => ({ owner: this.residentKeys[h]!.publicKey, cents: H.aidCents[h]! })),
     );
     this.aidInFlight--;
     if (this.disposed) return;
@@ -558,7 +619,9 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
     for (let k = 0; k < hs.length; k++) {
       const h = hs[k]!;
       const h3 = H.h3[h]!;
-      this.tiger.disbursement(this.key, { ts: new Date(now), simT, household: h, h3, amountCents: H.aidCents[h]!, timeToAidMs: Math.round(now - dues[k]!), signature: r.signature });
+      const timeToAidMs = Math.round(now - dues[k]!);
+      this.tiger.disbursement(this.key, { ts: new Date(now), simT, household: h, h3, amountCents: H.aidCents[h]!, timeToAidMs, signature: r.signature });
+      this.aidLog.set(h, { signature: r.signature, simT, timeToAidMs });
       this.shopper.funded(this.hh, h, simT);
       this.schedule(h, this.hh.nextTrip[h]!);
       const cell = this.batch.aid.get(h3) ?? { usd: 0, households: 0 };
@@ -597,7 +660,7 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
     const H = W.households;
     if (o.resaleTo !== undefined) {
       const to = o.resaleTo;
-      return { owner: this.residents[to]!.publicKey, name: "Another resident's wallet", category: "transfer", h3: H.h3[to]!, lonLat: [H.lon[to]!, H.lat[to]!] };
+      return { owner: this.residentKeys[to]!.publicKey, name: "Another resident's wallet", category: "transfer", h3: H.h3[to]!, lonLat: [H.lon[to]!, H.lat[to]!] };
     }
     if (o.rogueStore !== undefined) {
       const h = o.household;
@@ -612,7 +675,7 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
     const H = this.world.households;
     const h = o.household;
     const dest = this.destination(o);
-    const r = await this.chain.pay({ mint: this.mint, resident: this.residents[h]!, merchant: dest.owner, cents: o.amountCents });
+    const r = await this.chain.pay({ mint: this.mint, resident: this.residentKeys[h]!, merchant: dest.owner, cents: o.amountCents });
     this.hh.reserved[h]! -= o.amountCents;
     if (r.ok) this.hh.spent[h]! += o.amountCents;
     else this.hh.forget(h, t, o.amountCents);
@@ -621,64 +684,305 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
       this.stats.dropped++;
       return;
     }
+    const lines: OrderLine[] = o.lines.map((l) => ({ itemId: l.id, name: ALL_ITEMS[l.id]!.name, qty: l.qty, unitCents: l.cents }));
+    this.settle({ resident: h, home: [H.lon[h]!, H.lat[h]!], homeH3: H.h3[h]!, merchant: o.merchant, dest, cents: o.amountCents, lines, r, origin: "sim", orderId: null, who: H.name[h]! });
+  }
+
+  /**
+   * Books one payment that reached the chain, from the sim or the app: Tiger, the run's numbers,
+   * the store's shelf and takings, the merchant terminal, the map and feed, and the `payment` event.
+   */
+  private settle(p: {
+    resident: number;
+    home: [number, number];
+    homeH3: string;
+    merchant: number;
+    dest: Destination;
+    cents: number;
+    lines: OrderLine[];
+    r: SendResult & { signature: string };
+    origin: FeedOrigin;
+    orderId: string | null;
+    who: string;
+  }) {
+    const { r, lines } = p;
     const simT = this.clock.now();
     const error = r.ok ? null : (r.decoded?.name ?? "Unknown");
     this.tiger.payment(this.key, {
       ts: new Date(),
       simT,
-      household: h,
-      merchant: o.merchant,
-      category: dest.category,
-      amountCents: o.amountCents,
-      itemIds: o.lines.map((l) => l.id),
-      itemQty: o.lines.map((l) => l.qty),
-      itemCents: o.lines.map((l) => l.cents),
+      household: p.resident,
+      merchant: p.merchant,
+      category: p.dest.category,
+      amountCents: p.cents,
+      itemIds: lines.map((l) => l.itemId),
+      itemQty: lines.map((l) => l.qty),
+      itemCents: lines.map((l) => l.unitCents),
       ok: r.ok,
       error,
-      h3: H.h3[h]!,
-      merchantH3: dest.h3,
+      h3: p.homeH3,
+      merchantH3: p.dest.h3,
       latencyMs: r.latencyMs,
       signature: r.signature,
     });
 
     if (r.ok) {
       this.stats.payments++;
-      this.stats.spentCents += o.amountCents;
+      this.stats.spentCents += p.cents;
+      this.market.recordSale(p.merchant, lines, p.cents, simT);
     } else {
       this.stats.blocked++;
       this.stats.blockedBy[error!] = (this.stats.blockedBy[error!] ?? 0) + 1;
+      this.market.recordBlocked(p.merchant);
     }
 
-    // Arcs: a uniform sample of this batch's payments.
+    const first = lines[0];
+    const what = first ? `${first.qty > 1 ? `${first.qty}× ` : ""}${first.name}${lines.length > 1 ? ` +${lines.length - 1} more` : ""}` : "Purchase";
+    const app = p.origin !== "sim";
+    if (p.merchant >= 0) {
+      this.activity.push(p.merchant, {
+        kind: r.ok ? "payment" : "blocked",
+        at: Date.now(),
+        simT,
+        cents: p.cents,
+        lines,
+        resident: p.resident,
+        residentName: app ? p.who : null,
+        origin: p.origin,
+        signature: r.signature,
+        rule: error,
+        detail: r.ok ? what : (REJECTION_COPY[error!] ?? r.decoded?.message ?? "Blocked on-chain"),
+      });
+    }
+
     const b = this.batch;
-    const arc = { from: [round6(H.lon[h]!), round6(H.lat[h]!)] as [number, number], to: dest.lonLat.map(round6) as [number, number], usd: o.amountCents / 100, ok: r.ok, merchant: o.merchant };
-    b.paysSeen++;
-    if (b.pays.length < CAPS.arcs) b.pays.push(arc);
-    else {
-      const j = Math.floor(Math.random() * b.paysSeen);
-      if (j < CAPS.arcs) b.pays[j] = arc;
+    const to = p.dest.lonLat.map(round6) as [number, number];
+    const from = [round6(p.home[0]), round6(p.home[1])] as [number, number];
+    if (app) {
+      b.spotlight.push({
+        kind: "order",
+        ok: r.ok,
+        from,
+        to,
+        usd: p.cents / 100,
+        label: `${p.who} · ${what}${p.origin === "agent" ? " via Grok" : p.origin === "mcp" ? " via an agent" : ""}`,
+        rule: error,
+        merchant: p.merchant >= 0 ? p.merchant : null,
+        resident: p.resident,
+        origin: p.origin,
+        signature: r.signature,
+      });
+    } else {
+      // Arcs: a uniform sample of this batch's sim payments.
+      const arc = { from, to, usd: p.cents / 100, ok: r.ok, merchant: p.merchant };
+      b.paysSeen++;
+      if (b.pays.length < CAPS.arcs) b.pays.push(arc);
+      else {
+        const j = Math.floor(Math.random() * b.paysSeen);
+        if (j < CAPS.arcs) b.pays[j] = arc;
+      }
     }
 
-    const first = o.lines[0];
-    this.pushFeed({
-      kind: r.ok ? "payment" : "blocked",
-      signature: r.signature,
+    this.pushFeed(
+      {
+        kind: r.ok ? "payment" : "blocked",
+        signature: r.signature,
+        simT,
+        usd: p.cents / 100,
+        title: p.dest.name,
+        detail: r.ok ? (app ? `${p.who} · ${what}` : what) : (REJECTION_COPY[error!] ?? r.decoded?.message ?? "Blocked on-chain"),
+        rule: error,
+        latencyMs: r.latencyMs,
+        ...(app ? { origin: p.origin } : {}),
+      },
+      app,
+    );
+
+    this.emit("payment", {
+      seq: ++this.paySeq,
+      at: Date.now(),
       simT,
-      usd: o.amountCents / 100,
-      title: dest.name,
-      detail: r.ok
-        ? first
-          ? `${first.qty > 1 ? `${first.qty}× ` : ""}${ALL_ITEMS[first.id]!.name}${o.lines.length > 1 ? ` +${o.lines.length - 1} more` : ""}`
-          : "Purchase"
-        : (REJECTION_COPY[error!] ?? r.decoded?.message ?? "Blocked on-chain"),
+      resident: p.resident,
+      merchant: p.merchant,
+      cents: p.cents,
+      lines,
+      ok: r.ok,
       rule: error,
-      latencyMs: r.latencyMs,
+      origin: p.origin,
+      signature: r.signature,
+      orderId: p.orderId,
     });
   }
 
-  private pushFeed(item: FeedItem) {
+  // ---------- people: app payments, "I live here", the oracle's actions ----------
+
+  /** Pays a store from an app resident's wallet, signed by their server-held key or by the agent key (SPL delegate). */
+  async payApp(p: AppPayment): Promise<AppPayResult> {
+    const signer = p.payer === "agent" ? this.chain.keys.agent : p.resident.keypair;
+    if (!signer) throw new ApiFail(409, "needs_signature", "This wallet's key is on the phone; confirm there");
+    const merchant = this.merchantKeys[p.store];
+    if (!merchant) throw new ApiFail(404, "not_found", `No store ${p.store}`);
+    const r = await this.chain.payAs({ mint: this.mint, owner: p.resident.owner, authority: signer, merchant: merchant.publicKey, cents: p.cents });
+    return this.settleApp(p, r);
+  }
+
+  /** Books an app payment's result (also used when a phone-signed payment comes back through the relay). */
+  settleApp(p: AppPayment, r: SendResult): AppPayResult {
+    const rule = r.ok ? null : (r.decoded?.name ?? "SendFailed");
+    const message = r.ok ? null : (REJECTION_COPY[rule!] ?? r.decoded?.message ?? "Payment failed");
+    if (r.signature === null || this.disposed) return { ok: false, signature: r.signature, rule, message, latencyMs: r.latencyMs };
+    const res = p.resident;
+    const M = this.world.merchants;
+    const m = p.store;
+    if (r.ok) this.people.booked(res, this.clock.now(), p.cents);
+    this.settle({
+      resident: res.idx,
+      home: [res.lon, res.lat],
+      homeH3: res.h3,
+      merchant: m,
+      dest: { owner: this.merchantKeys[m]!.publicKey, name: M.name[m]!, category: M.category[m]!, h3: M.h3[m]!, lonLat: [M.lon[m]!, M.lat[m]!] },
+      cents: p.cents,
+      lines: p.lines,
+      r: r as SendResult & { signature: string },
+      origin: p.origin,
+      orderId: p.orderId,
+      who: res.name,
+    });
+    return { ok: r.ok, signature: r.signature, rule, message, latencyMs: r.latencyMs };
+  }
+
+  /** Registers a phone's household on-chain; its aid lands when the storm reaches it (at once if it already has). */
+  async enrollApp(r: AppResident) {
+    const res = await this.chain.enrollOne(this.mint, r.owner, r.idx);
+    this.record("enroll", res, 1, 0);
+    if (!res.ok) throw new ApiFail(502, res.decoded?.name ?? "chain_error", `Registration failed on-chain: ${res.decoded?.message ?? "unknown error"}`);
+    r.enrolled = true;
+    const t = this.clock.now();
+    this.emit("join", {
+      resident: r.idx,
+      name: r.name,
+      lat: r.lat,
+      lon: r.lon,
+      county: r.county,
+      aidCents: r.aidCents,
+      identity: r.identity,
+      simT: t,
+      at: Date.now(),
+    });
+    if (this.funded) await this.growBudget(r.aidCents);
+    else this.budgetCents += r.aidCents;
+    r.dueWallMs = Math.max(Date.now(), this.clock.wallTimeOf(r.aidDue));
+    this.appAidQ.push(r);
+  }
+
+  /** Raises the declaration's budget on-chain by a newcomer's aid (one at a time). */
+  private growBudget(cents: number): Promise<void> {
+    const next = this.budgetOp.then(async () => {
+      const budget = this.budgetCents + cents;
+      const r = await this.chain.fund(this.mint, budget);
+      this.record("fund", r, 0, cents);
+      if (!r.ok) throw new ApiFail(502, r.decoded?.name ?? "chain_error", `Couldn't fund the new household: ${r.decoded?.message ?? "unknown error"}`);
+      this.budgetCents = budget;
+      this.emit("info");
+    });
+    this.budgetOp = next.catch(() => {});
+    return next;
+  }
+
+  private async disburseApp(r: AppResident) {
+    const res = await this.chain.disburse(this.mint, [{ owner: r.owner, cents: r.aidCents }]);
+    if (this.disposed) return;
+    this.record("disburse", res, 1, r.aidCents);
+    if (!res.ok) {
+      if (++r.aidTries < 4) this.appAidQ.push(r);
+      else console.error(`aid for ${r.name} failed:`, res.decoded?.name);
+      return;
+    }
+    const now = Date.now();
+    const simT = this.clock.now();
+    const timeToAidMs = Math.max(0, Math.round(now - Math.max(r.dueWallMs, r.registeredAt)));
+    r.fundedAt = simT;
+    this.aidLog.set(r.idx, { signature: res.signature, simT, timeToAidMs });
+    this.tiger.disbursement(this.key, { ts: new Date(now), simT, household: r.idx, h3: r.h3, amountCents: r.aidCents, timeToAidMs, signature: res.signature });
+    this.stats.aidHouseholds++;
+    this.stats.aidCents += r.aidCents;
+    const cell = this.batch.aid.get(r.h3) ?? { usd: 0, households: 0 };
+    cell.usd += r.aidCents / 100;
+    cell.households++;
+    this.batch.aid.set(r.h3, cell);
+    this.batch.spotlight.push({
+      kind: "join",
+      ok: true,
+      from: [round6(r.lon), round6(r.lat)],
+      to: null,
+      usd: r.aidCents / 100,
+      label: `${r.name} · aid landed`,
+      rule: null,
+      merchant: null,
+      resident: r.idx,
+      origin: "join",
+      signature: res.signature,
+    });
+    this.pushFeed(
+      { kind: "join", signature: res.signature, simT, usd: r.aidCents / 100, title: `Aid landed · ${r.name}`, detail: `Registered from a phone in ${r.county}`, rule: null, latencyMs: timeToAidMs, origin: "join" },
+      true,
+    );
+  }
+
+  /** The oracle key suspends or reinstates a store on-chain. After a suspension the transfer hook refuses it. */
+  async setStoreStatus(m: number, status: "approved" | "suspended", reason: string): Promise<AppPayResult> {
+    const M = this.world.merchants;
+    const kp = this.merchantKeys[m];
+    if (!kp) throw new ApiFail(404, "not_found", `No store ${m}`);
+    const r = await this.chain.setStoreStatus(this.mint, kp.publicKey, status);
+    this.record("oracle", r, 1, 0);
+    const out: AppPayResult = { ok: r.ok, signature: r.signature, rule: r.ok ? null : (r.decoded?.name ?? "SendFailed"), message: r.ok ? null : (r.decoded?.message ?? "failed"), latencyMs: r.latencyMs };
+    if (!r.ok || this.disposed) return out;
+    const state = this.market.setStatus(m, status);
+    this.emit("store", state);
+    const simT = this.clock.now();
+    const title = `${M.name[m]} ${status === "suspended" ? "suspended" : "reinstated"} by the oracle`;
+    this.activity.push(m, { kind: "status", at: Date.now(), simT, cents: 0, lines: [], resident: null, residentName: null, origin: "oracle", signature: r.signature, rule: null, detail: `${title}: ${reason}` });
+    this.batch.spotlight.push({ kind: "oracle", ok: true, from: [round6(M.lon[m]!), round6(M.lat[m]!)], to: null, usd: 0, label: title, rule: null, merchant: m, resident: null, origin: "oracle", signature: r.signature });
+    this.pushFeed({ kind: "oracle", signature: r.signature!, simT, usd: 0, title, detail: reason, rule: null, latencyMs: r.latencyMs, origin: "oracle" }, true);
+    return out;
+  }
+
+  /** The oracle key freezes (or thaws) a household's relief account. Token-2022 then refuses its payments. */
+  async setWalletFrozen(idx: number, frozen: boolean, reason: string): Promise<AppPayResult> {
+    const r0 = this.people.get(idx);
+    if (!r0) throw new ApiFail(404, "not_found", `No household ${idx}`);
+    const r = await this.chain.setWalletFrozen(this.mint, r0.owner, frozen);
+    this.record("oracle", r, 1, 0);
+    const out: AppPayResult = { ok: r.ok, signature: r.signature, rule: r.ok ? null : (r.decoded?.name ?? "SendFailed"), message: r.ok ? null : (r.decoded?.message ?? "failed"), latencyMs: r.latencyMs };
+    if (!r.ok || this.disposed) return out;
+    if (frozen) this.frozen.add(idx);
+    else this.frozen.delete(idx);
+    this.emit("resident", { resident: idx, frozen, caseId: this.residentCase.get(idx) ?? null, signature: r.signature });
+    const simT = this.clock.now();
+    const title = `${r0.name}'s wallet ${frozen ? "frozen" : "thawed"} by the oracle`;
+    this.batch.spotlight.push({ kind: "oracle", ok: true, from: [round6(r0.lon), round6(r0.lat)], to: null, usd: 0, label: title, rule: null, merchant: null, resident: idx, origin: "oracle", signature: r.signature });
+    this.pushFeed({ kind: "oracle", signature: r.signature!, simT, usd: 0, title, detail: reason, rule: null, latencyMs: r.latencyMs, origin: "oracle" }, true);
+    return out;
+  }
+
+  /** An oracle case opened (caseId) or closed (null) on a store: its map dot turns amber. */
+  flagStore(m: number, caseId: string | null): StoreState {
+    const state = this.market.setFlag(m, caseId);
+    this.emit("store", state);
+    return state;
+  }
+
+  flagResident(idx: number, caseId: string | null) {
+    if (caseId) this.residentCase.set(idx, caseId);
+    else this.residentCase.delete(idx);
+    this.emit("resident", { resident: idx, frozen: this.frozen.has(idx), caseId, signature: null });
+  }
+
+  /** `force`: app and oracle events are never dropped by the per-batch caps. */
+  private pushFeed(item: FeedItem, force = false) {
     const b = this.batch;
-    if (item.kind === "aid" || item.kind === "payment" || item.kind === "blocked") {
+    if (!force && (item.kind === "aid" || item.kind === "payment" || item.kind === "blocked")) {
       if (b.counts[item.kind] >= CAPS[item.kind]) return;
       b.counts[item.kind]++;
     }
@@ -706,9 +1010,15 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
 
     const W = this.world;
     const H = W.households;
-    const owners: number[] = [];
-    const left = (h: number) => H.aidCents[h]! - this.hh.spent[h]!;
-    for (let h = 0; h < H.n; h++) if (!Number.isNaN(this.hh.fundedAt[h]!) && left(h) > 0) owners.push(h);
+    const owners: { owner: PublicKey; cents: number }[] = [];
+    for (let h = 0; h < H.n; h++) {
+      const left = H.aidCents[h]! - this.hh.spent[h]!;
+      if (!Number.isNaN(this.hh.fundedAt[h]!) && left > 0) owners.push({ owner: this.residentKeys[h]!.publicKey, cents: left });
+    }
+    for (const r of this.people.joined) {
+      const left = r.aidCents - r.spentCents;
+      if (!Number.isNaN(r.fundedAt) && left > 0) owners.push({ owner: r.owner, cents: left });
+    }
 
     this.setProgress("Returning unspent aid", 0, owners.length, true);
     const clock = await this.chain.setClock(this.mint, 1, W.domain.end + HOUR);
@@ -717,9 +1027,9 @@ export class Run extends EventEmitter<{ info: []; clock: [] }> {
     const t0 = Date.now();
     await this.chain.clawback(
       this.mint,
-      owners.map((h) => this.residents[h]!.publicKey),
+      owners.map((o) => o.owner),
       (k, r, first) => {
-        const cents = owners.slice(first, first + k).reduce((a, h) => a + left(h), 0);
+        const cents = owners.slice(first, first + k).reduce((a, o) => a + o.cents, 0);
         this.record("clawback", r, k, cents);
         if (r.ok) this.stats.returnedCents += cents;
         this.setProgress("Returning unspent aid", (done += k), owners.length);

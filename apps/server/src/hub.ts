@@ -24,6 +24,7 @@ export class Hub {
   private seriesAgain = false;
   private timers: ReturnType<typeof setInterval>[] = [];
   private runKey = "";
+  private readonly snapshots: ((run: Run) => ServerMsg[])[] = [];
 
   constructor(
     wss: WebSocketServer,
@@ -39,6 +40,8 @@ export class Hub {
         this.kpis = null;
         this.series = null;
         this.broadcast({ type: "merchants", runId: run.key, merchants: run.merchantDots() });
+        run.on("store", (state) => this.broadcast({ type: "store", runId: run.key, state }));
+        for (const msg of this.snapshotOf(run)) this.broadcast(msg);
       }
     });
     sim.on("clock", () => this.sendClock());
@@ -64,6 +67,31 @@ export class Hub {
     return this.clients.size;
   }
 
+  /** Sends a message to every connected page (the oracle engine's `case` updates, for one). */
+  publish(msg: ServerMsg) {
+    this.broadcast(msg);
+  }
+
+  /**
+   * Registers messages every page gets on connect and whenever a new run starts (e.g. the oracle's
+   * `cases` list). Called with the current run; return [] to send nothing.
+   */
+  addSnapshot(fn: (run: Run) => ServerMsg[]) {
+    this.snapshots.push(fn);
+  }
+
+  private snapshotOf(run: Run): ServerMsg[] {
+    const out: ServerMsg[] = [{ type: "stores", runId: run.key, states: run.market.nonDefaultStates() }];
+    for (const fn of this.snapshots) {
+      try {
+        out.push(...fn(run));
+      } catch (err) {
+        console.error("snapshot:", (err as Error).message);
+      }
+    }
+    return out;
+  }
+
   private connect(ws: WebSocket) {
     this.clients.add(ws);
     const run = this.sim.run;
@@ -71,6 +99,7 @@ export class Hub {
     const clock = this.clockMsg();
     if (clock) this.send(ws, clock);
     if (run) this.send(ws, { type: "merchants", runId: run.key, merchants: run.merchantDots() });
+    if (run) for (const msg of this.snapshotOf(run)) this.send(ws, msg);
     if (run && this.kpis?.runId === run.key) this.send(ws, { type: "kpis", ...this.kpis });
     if (run && this.series?.runId === run.key) this.send(ws, { type: "series", ...this.series });
     ws.on("message", (data) => {
@@ -170,7 +199,7 @@ export class Hub {
         simT: history ? history.t : run.clock.now(),
         history: !!history,
         ...totals,
-        treasuryUsd: run.funded ? Math.max(0, Math.round(run.world.budgetCents - totals.disbursedUsd * 100 + totals.returnedUsd * 100) / 100) : 0,
+        treasuryUsd: run.funded ? Math.max(0, Math.round(run.budgetCents - totals.disbursedUsd * 100 + totals.returnedUsd * 100) / 100) : 0,
         txPerSec: Math.round(recent.reduce((a, b) => a + b, 0) / recent.length),
         txSeries,
         tiger: { ok: this.tiger.ok, rowsPerSec: this.tiger.rowsPerSec(), rows: this.tiger.rows, queryMs, compressionPct: this.compression.pct },

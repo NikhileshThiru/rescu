@@ -5,7 +5,7 @@ import postgres from "postgres";
 export interface ChainTxRow {
   ts: Date;
   simT: number;
-  kind: "register" | "enroll" | "fund" | "disburse" | "clock" | "clawback";
+  kind: "register" | "enroll" | "fund" | "disburse" | "clock" | "clawback" | "oracle" | "approve";
   ok: boolean;
   error: string | null;
   recipients: number;

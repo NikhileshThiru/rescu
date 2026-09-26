@@ -182,16 +182,19 @@ export class RescuClient {
     return this.send(await this.registerMerchantInstructions(admin.publicKey, mint, owner, opts), [admin]);
   }
 
-  async setMerchantStatus(signer: Keypair, mint: PublicKey, owner: PublicKey, status: MerchantStatusName) {
-    const ix = await this.program.methods
+  setMerchantStatusInstruction(authority: PublicKey, mint: PublicKey, owner: PublicKey, status: MerchantStatusName) {
+    return this.program.methods
       .setMerchantStatus({ [status]: {} } as never)
       .accountsPartial({
-        authority: signer.publicKey,
+        authority,
         declaration: declarationPda(mint),
         merchant: merchantPda(owner),
       })
       .instruction();
-    return this.send([ix], [signer]);
+  }
+
+  async setMerchantStatus(signer: Keypair, mint: PublicKey, owner: PublicKey, status: MerchantStatusName) {
+    return this.send([await this.setMerchantStatusInstruction(signer.publicKey, mint, owner, status)], [signer]);
   }
 
   /** A relief-dollar account for any owner (e.g. a store that never registered). */
@@ -316,6 +319,11 @@ export class RescuClient {
     return this.send([ix], [p.signer], { skipPreflight: p.skipPreflight });
   }
 
+  /** The resident (owner) approves `agent` as SPL delegate for up to `allowance` base units. */
+  approveAgentInstruction(owner: PublicKey, mint: PublicKey, agent: PublicKey, allowance: bigint) {
+    return createApproveCheckedInstruction(reliefAta(owner, mint), mint, agent, owner, allowance, DECIMALS, [], TOKEN_2022_PROGRAM_ID);
+  }
+
   /** Resident grants the agent key an on-chain spending allowance (SPL delegate). */
   async approveAgent(resident: Keypair, mint: PublicKey, agent: PublicKey, allowance: bigint) {
     const ix = createApproveCheckedInstruction(
@@ -333,11 +341,11 @@ export class RescuClient {
 
   // ---------- oracle + close-out ----------
 
-  async setWalletFrozen(signer: Keypair, mint: PublicKey, owner: PublicKey, frozen: boolean) {
-    const ix = await this.program.methods
+  setWalletFrozenInstruction(signer: PublicKey, mint: PublicKey, owner: PublicKey, frozen: boolean) {
+    return this.program.methods
       .setWalletFrozen(frozen)
       .accountsPartial({
-        signer: signer.publicKey,
+        signer,
         declaration: declarationPda(mint),
         mint,
         authority: authorityPda(),
@@ -345,7 +353,10 @@ export class RescuClient {
         tokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .instruction();
-    return this.send([ix], [signer]);
+  }
+
+  async setWalletFrozen(signer: Keypair, mint: PublicKey, owner: PublicKey, frozen: boolean) {
+    return this.send([await this.setWalletFrozenInstruction(signer.publicKey, mint, owner, frozen)], [signer]);
   }
 
   async clawbackInstruction(mint: PublicKey, owner: PublicKey) {
@@ -381,6 +392,16 @@ export class RescuClient {
 
   fetchMerchant(owner: PublicKey) {
     return this.program.account.merchant.fetch(merchantPda(owner));
+  }
+
+  /** The resident's relief-dollar account as the chain sees it (null if it doesn't exist). */
+  async tokenAccount(owner: PublicKey, mint: PublicKey) {
+    try {
+      const a = await getAccount(this.connection, reliefAta(owner, mint), "confirmed", TOKEN_2022_PROGRAM_ID);
+      return { amount: a.amount, delegate: a.delegate, delegatedAmount: a.delegatedAmount, isFrozen: a.isFrozen };
+    } catch {
+      return null;
+    }
   }
 
   async balance(owner: PublicKey, mint: PublicKey): Promise<bigint> {
