@@ -1,6 +1,9 @@
+import { timingSafeEqual } from "node:crypto";
+import { PRESENTER_HEADER } from "@rescu/live";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import type { ChainRunner } from "./chain.js";
+import { config } from "./config.js";
 import type { Grok } from "./grok.js";
 import type { Hub } from "./hub.js";
 import { ApiFail } from "./network/errors.js";
@@ -32,6 +35,22 @@ export function currentRun(s: Services): Run {
 export function bearer(req: FastifyRequest): string | null {
   const h = req.headers.authorization;
   return h?.startsWith("Bearer ") ? h.slice(7).trim() : null;
+}
+
+/** True when `key` is the presenter key, or when none is configured (local dev). Constant-time. */
+export function isPresenter(key: string | null | undefined): boolean {
+  const want = config.presenterKey;
+  if (!want) return true;
+  if (!key) return false;
+  const a = Buffer.from(key);
+  const b = Buffer.from(want);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Routes that change the shared demo (oracle actions, prices, break-it) call this first. */
+export function requirePresenter(req: FastifyRequest) {
+  const h = req.headers[PRESENTER_HEADER];
+  if (!isPresenter(Array.isArray(h) ? h[0] : h)) throw new ApiFail(403, "presenter_only", "View only: the presenter runs this part of the demo.");
 }
 
 /** The resident behind `Authorization: Bearer <token>` in the current run, or a 401. */

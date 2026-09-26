@@ -13,6 +13,7 @@ import { registerOracle } from "./oracle/index.js";
 import { installErrorHandler, type Services } from "./services.js";
 import { Sim } from "./sim.js";
 import { Tiger } from "./tiger.js";
+import { registerToken } from "./token.js";
 
 const chain = new ChainRunner(loadKeys());
 const tiger = new Tiger(config.tigerUrl);
@@ -46,6 +47,7 @@ await registerMarket(app, services);
 await registerMerchant(app, services);
 await registerOracle(app, services);
 await registerBreakit(app, services);
+await registerToken(app, services);
 
 await app.listen({ port: config.port, host: "0.0.0.0" });
 console.log(`rescu server on http://localhost:${config.port} (ws ${WS_PATH}), validator ${config.rpcUrl}`);

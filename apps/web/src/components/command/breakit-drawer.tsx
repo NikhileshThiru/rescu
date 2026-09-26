@@ -90,7 +90,9 @@ export function BreakitDrawer({ open, onClose, live }: { open: boolean; onClose:
   const cases = state?.cases?.length ? state.cases : BREAK_CASES;
   const attacks = cases.filter((c) => c.expect !== null);
   const stopped = attacks.filter((c) => results[c.id] && !results[c.id]!.landed).length;
-  const ready = !!state?.ready;
+  const presenter = useLive(live, (s) => s.presenter);
+  // Viewers see the attacks and their results; only the presenter fires them.
+  const ready = !!state?.ready && presenter;
 
   const run = useCallback(
     async (id: BreakCaseId) => {
@@ -172,6 +174,7 @@ export function BreakitDrawer({ open, onClose, live }: { open: boolean; onClose:
           <p className="mt-2 text-xs leading-relaxed text-text-3">
             Each button sends a real attack to our program on Solana, in a sandbox so the live numbers stay clean. The chain itself says
             no.
+            {!presenter && state?.ready && <span className="text-text-2"> The presenter fires them during the demo.</span>}
           </p>
           <div className="mt-4 flex items-end justify-between gap-4">
             <div>

@@ -35,6 +35,7 @@ export function MerchantTerminal() {
   const live = useLiveClient();
   const run = useLive(live, (s) => s.run);
   const states = useLive(live, (s) => s.stores);
+  const presenter = useLive(live, (s) => s.presenter);
   const runId = run?.id ?? null;
   const cluster = run?.explorerCluster ?? null;
 
@@ -294,10 +295,10 @@ export function MerchantTerminal() {
 
               <div className="flex items-center justify-between px-5 pb-2">
                 <h3 className="eyebrow">Shelf</h3>
-                <span className="text-2xs text-text-3">Click a price to change it. The oracle checks it against nearby stores' pre-storm prices.</span>
+                <span className="text-2xs text-text-3">{presenter ? "Click a price to change it. The oracle checks it against nearby stores' pre-storm prices." : "The oracle checks every price against nearby stores' pre-storm prices."}</span>
               </div>
               {store ? (
-                <Shelf listings={store.listings} save={save} onEdit={editPrice} disabled={run?.phase === "ended"} />
+                <Shelf listings={store.listings} save={save} onEdit={editPrice} disabled={run?.phase === "ended" || !presenter} />
               ) : (
                 <div className="space-y-1.5 px-5 pt-2">
                   {Array.from({ length: 12 }, (_, i) => (

@@ -1,7 +1,7 @@
 import { type ApiRoutes, CATEGORIES, ChargeInput, type MerchantCategory, SetPriceInput } from "@rescu/live";
 import type { FastifyInstance } from "fastify";
 import type { Run } from "../run.js";
-import { ApiFail, currentRun, type Services } from "../services.js";
+import { ApiFail, currentRun, requirePresenter, type Services } from "../services.js";
 
 type Res<R extends keyof ApiRoutes> = Promise<ApiRoutes[R]["res"]>;
 
@@ -29,6 +29,7 @@ export async function registerMerchant(app: FastifyInstance, s: Services): Promi
 
   /** Sets a listed price; the oracle hears about it at once (a gouging case opens within ~1-2 s). */
   app.patch<{ Params: { idx: string } }>("/api/merchant/stores/:idx/prices", async (req): Res<"PATCH /api/merchant/stores/:idx/prices"> => {
+    requirePresenter(req);
     const run = currentRun(s);
     const m = storeIdx(run, req.params.idx);
     const body = SetPriceInput.parse(req.body ?? {});

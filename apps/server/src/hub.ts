@@ -1,6 +1,7 @@
 import type { ClientMsg, Kpis, ServerMsg, SpendSeries } from "@rescu/live";
 import type { WebSocket, WebSocketServer } from "ws";
 import type { Run } from "./run.js";
+import { isPresenter } from "./services.js";
 import type { Sim } from "./sim.js";
 import type { Tiger } from "./tiger.js";
 
@@ -15,6 +16,8 @@ const SERIES_STEP = 3 * 3600;
 /** One WebSocket for every Command Center: run state, the clock, live numbers and events. */
 export class Hub {
   private readonly clients = new Set<WebSocket>();
+  /** Sockets that sent the presenter key (every socket when none is configured). */
+  private readonly presenters = new Set<WebSocket>();
   private kpis: { runId: string; kpis: Kpis } | null = null;
   private series: { runId: string; series: SpendSeries } | null = null;
   private compression: { at: number; pct: number | null } = { at: 0, pct: null };
@@ -95,7 +98,8 @@ export class Hub {
   private connect(ws: WebSocket) {
     this.clients.add(ws);
     const run = this.sim.run;
-    this.send(ws, { type: "hello", serverTime: Date.now(), run: this.sim.info(), clock: this.clockOf(run) });
+    if (isPresenter(null)) this.presenters.add(ws);
+    this.send(ws, { type: "hello", serverTime: Date.now(), run: this.sim.info(), clock: this.clockOf(run), presenter: this.presenters.has(ws) });
     const clock = this.clockMsg();
     if (clock) this.send(ws, clock);
     if (run) this.send(ws, { type: "merchants", runId: run.key, merchants: run.merchantDots() });
@@ -111,16 +115,35 @@ export class Hub {
       }
       this.handle(ws, msg).catch((err) => this.send(ws, { type: "error", message: (err as Error).message }));
     });
-    ws.on("close", () => this.clients.delete(ws));
-    ws.on("error", () => this.clients.delete(ws));
+    ws.on("close", () => {
+      this.clients.delete(ws);
+      this.presenters.delete(ws);
+    });
+    ws.on("error", () => {
+      this.clients.delete(ws);
+      this.presenters.delete(ws);
+    });
   }
 
   private async handle(ws: WebSocket, msg: ClientMsg) {
     const num = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+    if (msg?.type === "ping") {
+      this.send(ws, { type: "pong", client: num(msg.client) ? msg.client : 0, server: Date.now() });
+      return;
+    }
+    if (msg?.type === "auth") {
+      const ok = typeof msg.key === "string" && isPresenter(msg.key);
+      if (ok) this.presenters.add(ws);
+      else if (!isPresenter(null)) this.presenters.delete(ws);
+      this.send(ws, { type: "auth", presenter: ok });
+      return;
+    }
+    // Everything else steers the one shared run: presenter only.
+    if (!this.presenters.has(ws)) {
+      this.send(ws, { type: "error", message: "View only: the presenter controls the shared run." });
+      return;
+    }
     switch (msg?.type) {
-      case "ping":
-        this.send(ws, { type: "pong", client: num(msg.client) ? msg.client : 0, server: Date.now() });
-        return;
       case "stage":
         if (typeof msg.slug === "string") await this.sim.stage(msg.slug);
         return;

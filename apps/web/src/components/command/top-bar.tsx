@@ -93,7 +93,10 @@ export function TopBar({
   qrOpen?: boolean;
   onQr?: (open: boolean) => void;
 }) {
-  const { playing, speed } = useClockState(clock);
+  const { playing, speed, driven } = useClockState(clock);
+  const presenter = useLive(live, (s) => s.presenter);
+  // A live network's clock is the presenter's; viewers see it but can't steer it.
+  const locked = driven && !presenter;
   return (
     <header className="glass pointer-events-auto absolute inset-x-0 top-0 z-20 flex h-14 items-center gap-5 border-b border-line px-4">
       <Logo compact />
@@ -119,6 +122,8 @@ export function TopBar({
           size="icon"
           aria-label={playing ? "Pause" : "Play"}
           onClick={() => clock.setPlaying(!playing)}
+          disabled={locked}
+          title={locked ? "View only: the presenter controls the clock" : undefined}
           className="rounded-full"
         >
           <PlayIcon playing={playing} />
@@ -129,6 +134,7 @@ export function TopBar({
           value={speed}
           onChange={(s) => clock.setSpeed(s)}
           options={SPEEDS.map((s) => ({ value: s.scale, label: s.label, title: s.hint }))}
+          className={locked ? "pointer-events-none opacity-40" : undefined}
         />
         <span className="hidden items-center gap-1 text-2xs text-text-3 2xl:flex">
           <Kbd>Space</Kbd> play

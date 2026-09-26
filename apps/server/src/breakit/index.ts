@@ -1,6 +1,6 @@
 import { BREAK_CASES, type BreakCaseId, type BreakitState, type BreakResult } from "@rescu/live";
 import type { FastifyInstance } from "fastify";
-import { ApiFail, type Services } from "../services.js";
+import { ApiFail, requirePresenter, type Services } from "../services.js";
 import { Sandbox } from "./sandbox.js";
 
 /**
@@ -15,6 +15,7 @@ export async function registerBreakit(app: FastifyInstance, s: Services): Promis
   app.get("/api/breakit", async (): Promise<BreakitState> => sandbox.state());
 
   app.post<{ Params: { id: string } }>("/api/breakit/:id", async (req): Promise<BreakResult> => {
+    requirePresenter(req);
     const c = BREAK_CASES.find((x) => x.id === req.params.id);
     if (!c) throw new ApiFail(404, "not_found", `No attack called "${req.params.id}"`);
     if (!sandbox.isReady) throw new ApiFail(409, "not_ready", `The sandbox isn't ready yet: ${sandbox.status}`);

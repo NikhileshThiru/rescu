@@ -154,7 +154,10 @@ export interface LiveBatch {
 }
 
 export type ServerMsg =
-  | { type: "hello"; serverTime: number; run: RunInfo | null; clock: ClockState | null }
+  /** `presenter`: this socket may control the shared run (always, when the server has no presenter key). */
+  | { type: "hello"; serverTime: number; run: RunInfo | null; clock: ClockState | null; presenter: boolean }
+  /** Answer to `auth`. */
+  | { type: "auth"; presenter: boolean }
   | { type: "run"; run: RunInfo | null }
   /** `head` is the live network's sim time; while `history` is on, the clock shows an earlier moment. */
   | { type: "clock"; clock: ClockState; history: boolean; head: number }
@@ -175,6 +178,8 @@ export type ServerMsg =
 
 export type ClientMsg =
   | { type: "ping"; client: number }
+  /** The presenter's key (from a one-time ?key= link). Without it a socket is view-only. */
+  | { type: "auth"; key: string }
   /** Prepare a run for this storm (no-op if it's already staged or live). */
   | { type: "stage"; slug: string }
   /** Declare and fund; the run starts from the presenter's current replay position. */

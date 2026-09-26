@@ -8,7 +8,11 @@
  *   is refused by the chain -> every "Try to break it" case -> a phone-key resident joins and pays
  *   by signing -> counter QR charge -> MCP agent session -> duplicate registration case.
  *
- *   node scripts/e2e-demo.mjs [--server http://localhost:4000] [--no-grok] [--skip breakit,mcp]
+ *   node scripts/e2e-demo.mjs [--server http://localhost:4000] [--key <presenter key>] [--no-grok] [--skip breakit,mcp]
+ *
+ * --key (or PRESENTER_KEY) is needed against a server that has one (the public deploy): the script
+ * plays the presenter (declare, clock, price hike, oracle action, break-it). It also checks that
+ * a viewer without the key is refused.
  *
  * Needs a server whose run is staged (ready) or live. Declares it if ready. Exit code 1 on any FAIL.
  */
@@ -21,6 +25,7 @@ const opt = (name, fallback) => {
 };
 const SERVER = opt("server", process.env.RESCU_SERVER ?? "http://localhost:4000").replace(/\/$/, "");
 const NO_GROK = args.includes("--no-grok");
+const KEY = opt("key", process.env.PRESENTER_KEY ?? "");
 const SKIP = new Set((opt("skip", "") ?? "").split(",").filter(Boolean));
 const WS_URL = `${SERVER.replace(/^http/, "ws")}/ws`;
 
@@ -37,6 +42,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function api(method, path, { body, token, raw } = {}) {
   const headers = {};
   if (body !== undefined) headers["content-type"] = "application/json";
+  if (KEY && method !== "GET") headers["x-presenter-key"] = KEY;
   if (token) headers.authorization = `Bearer ${token}`;
   const started = performance.now();
   const res = await fetch(`${SERVER}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -105,6 +111,7 @@ ws.onmessage = (e) => {
   }
 };
 const send = (msg) => ws.send(JSON.stringify(msg));
+if (KEY) send({ type: "auth", key: KEY });
 
 // ---------- 1. the run ----------
 
@@ -325,7 +332,28 @@ if (!SKIP.has("mcp")) {
   }
 }
 
-// ---------- 9. scorecard ----------
+// ---------- 9. a viewer without the presenter key can't steer the demo ----------
+
+if (KEY) {
+  const viewer = new WebSocket(WS_URL);
+  const got = [];
+  viewer.onmessage = (e) => got.push(JSON.parse(String(e.data)));
+  await new Promise((resolve, reject) => {
+    viewer.onopen = resolve;
+    viewer.onerror = () => reject(new Error("viewer socket"));
+  });
+  await until("the viewer's hello", async () => got.find((m) => m.type === "hello"), { timeoutMs: 5_000 });
+  check(got.find((m) => m.type === "hello")?.presenter === false, "viewer socket is view-only");
+  viewer.send(JSON.stringify({ type: "pause" }));
+  const refused = await until("the viewer's control refused", async () => got.find((m) => m.type === "error"), { timeoutMs: 5_000 }).catch(() => null);
+  check(!!refused, "viewer can't pause the shared run", refused?.message);
+  viewer.close();
+  const r = await fetch(`${SERVER}/api/merchant/stores/0/prices`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ itemId: 0, priceCents: 99_900 }) });
+  const body = await r.json().catch(() => ({}));
+  check(r.status === 403 && body.code === "presenter_only", `price edit without the key refused (${r.status} ${body.code})`);
+}
+
+// ---------- 10. scorecard ----------
 
 const metrics = await api("GET", "/api/oracle/metrics").catch(() => null);
 if (metrics) log(`oracle: scans ${metrics.scans}, last ${metrics.lastScanMs} ms, precision ${metrics.precision}, recall ${metrics.recall}, planted ${JSON.stringify(metrics.planted)}, grok $${metrics.grok.spentUsd}`);

@@ -34,6 +34,10 @@ export const config = {
   maxTps: num("SIM_MAX_TPS", 400),
   feePayers: num("SIM_FEE_PAYERS", 8),
   defaultStorm: process.env.SIM_DEFAULT_STORM || "helene-2024",
+  /** The public site (token metadata image and links). */
+  siteUrl: (process.env.PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://rescu.tech").replace(/\/$/, ""),
+  /** Required to control the shared run and act as oracle/merchant/break-it on a public deploy; empty = open (local dev). */
+  presenterKey: process.env.PRESENTER_KEY ?? "",
 };
 
 export function loadKeys() {

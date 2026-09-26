@@ -90,7 +90,10 @@ export function TimelineBar({ clock, timeline, storm, live }: { clock: SimClock;
   const run = useLive(live, (s) => s.run);
   const series = useLive(live, (s) => s.series);
   const history = useLive(live, (s) => s.history);
+  const presenter = useLive(live, (s) => s.presenter);
   const here = run?.slug === storm.slug;
+  // Viewers of a live network watch the presenter's clock; only the presenter scrubs it.
+  const locked = here && (run?.phase === "live" || run?.phase === "ended") && !presenter;
   const bar = useRef<HTMLDivElement>(null);
   const head = useRef<HTMLDivElement>(null);
   const fill = useRef<HTMLDivElement>(null);
@@ -171,7 +174,7 @@ export function TimelineBar({ clock, timeline, storm, live }: { clock: SimClock;
 
       <div
         ref={bar}
-        className="group relative h-14 cursor-ew-resize touch-none"
+        className={`group relative h-14 touch-none ${locked ? "cursor-default" : "cursor-ew-resize"}`}
         onPointerDown={(e) => {
           e.currentTarget.setPointerCapture(e.pointerId);
           // A live network's clock decides for itself where a scrub lands (history, jump ahead, back to live).

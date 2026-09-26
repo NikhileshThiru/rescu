@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { type ReactNode, useEffect, useId, useState } from "react";
 import { type SimClock, useClockTime } from "@/lib/clock";
 import { compact, formatClock, int, pct, relative, ruleLabel as ruleName, usd, usdCompact } from "@/lib/format";
-import { type LiveClient, useLive } from "@/lib/live";
+import { type LiveClient, type LiveState, useLive } from "@/lib/live";
 import type { Timeline } from "@/lib/storm-data";
 import { NumberTicker } from "../ui/number-ticker";
 import { Badge, Button, cx, Dot, Section, Stat } from "../ui/primitives";
@@ -148,6 +148,7 @@ function Note({ children, tone }: { children: ReactNode; tone?: "red" }) {
 
 function Elsewhere({ run, slug, live, onStorm }: { run: RunInfo; slug: string; live: LiveClient; onStorm: (s: string) => void }) {
   const busy = run.phase === "live" || run.phase === "staging";
+  const presenter = useLive(live, selPresenter);
   return (
     <div className="space-y-2.5">
       <Note>
@@ -161,7 +162,7 @@ function Elsewhere({ run, slug, live, onStorm }: { run: RunInfo; slug: string; l
         <Button variant="outline" size="sm" onClick={() => onStorm(run.slug)}>
           Show {run.stormName}
         </Button>
-        {!busy && (
+        {!busy && presenter && (
           <Button variant="ghost" size="sm" onClick={() => live.stage(slug)}>
             Prepare for this storm
           </Button>
@@ -170,6 +171,8 @@ function Elsewhere({ run, slug, live, onStorm }: { run: RunInfo; slug: string; l
     </div>
   );
 }
+
+const selPresenter = (s: LiveState) => s.presenter;
 
 function Progress({ progress: p }: { progress: RunInfo["progress"] }) {
   const f = p && p.total > 0 ? p.done / p.total : 0;
@@ -222,6 +225,7 @@ function Rules({ run }: { run: RunInfo }) {
 function Ready({ run, live, clock, timeline }: { run: RunInfo; live: LiveClient; clock: SimClock; timeline: Timeline }) {
   const t = useClockTime(clock, 2);
   const tooLate = t > timeline.end - 2 * 86400;
+  const presenter = useLive(live, selPresenter);
   const from = formatClock(t, timeline.timeZone);
   return (
     <div className="space-y-3">
@@ -237,6 +241,10 @@ function Ready({ run, live, clock, timeline }: { run: RunInfo; live: LiveClient;
         </Stat>
       </div>
       <Rules run={run} />
+      {!presenter ? (
+        <Note>Ready. The presenter declares the disaster from the Command Center; aid starts landing the moment they do.</Note>
+      ) : (
+        <>
       <Button
         variant="solid"
         className="h-9 w-full shadow-[0_0_24px_-6px_rgba(45,212,191,0.6)]"
@@ -250,12 +258,15 @@ function Ready({ run, live, clock, timeline }: { run: RunInfo; live: LiveClient;
           ? "Rewind the timeline to declare."
           : `Mints relief dollars on Solana and starts the clock from ${from.date}, ${from.time}. Aid lands as the storm reaches each household.`}
       </p>
+        </>
+      )}
     </div>
   );
 }
 
 function Running({ run, live, timeline, history }: { run: RunInfo; live: LiveClient; timeline: Timeline; history: boolean }) {
   const kpis = useLive(live, (s) => s.kpis);
+  const presenter = useLive(live, selPresenter);
   const ended = run.phase === "ended";
   const closedOut = ended && !!kpis && (!history || kpis.returnedUsd > 0);
   return (
@@ -274,7 +285,7 @@ function Running({ run, live, timeline, history }: { run: RunInfo; live: LiveCli
       <Feed live={live} run={run} />
       {kpis && <Categories kpis={kpis} />}
       {kpis && <TigerLine kpis={kpis} />}
-      {ended && !history && (
+      {ended && !history && presenter && (
         <Button variant="outline" size="sm" className="w-full" onClick={() => live.reset()}>
           Run it again
         </Button>
@@ -284,6 +295,7 @@ function Running({ run, live, timeline, history }: { run: RunInfo; live: LiveCli
 }
 
 function HistoryBanner({ kpis, live, timeline }: { kpis: Kpis; live: LiveClient; timeline: Timeline }) {
+  const presenter = useLive(live, selPresenter);
   const d = kpis.simT - timeline.landfall;
   const when =
     d < 0
@@ -294,9 +306,9 @@ function HistoryBanner({ kpis, live, timeline }: { kpis: Kpis; live: LiveClient;
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-amber/20 bg-amber-soft px-2.5 py-1.5">
       <span className="text-xs text-amber">Network as of {when}</span>
-      <Button size="sm" variant="ghost" className="h-6 text-amber hover:bg-amber/10 hover:text-amber" onClick={() => live.backToLive()}>
+      {presenter && <Button size="sm" variant="ghost" className="h-6 text-amber hover:bg-amber/10 hover:text-amber" onClick={() => live.backToLive()}>
         Back to live
-      </Button>
+      </Button>}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import {
 } from "@rescu/live";
 import { useSyncExternalStore } from "react";
 import { serverOverride } from "./api";
+import { presenterKey } from "./presenter";
 import type { ClockDriver } from "./clock";
 
 export type LinkStatus = "connecting" | "open" | "closed";
@@ -38,6 +39,8 @@ export interface LiveState {
   cases: OracleCase[];
   /** Stores whose status/flag isn't the default, by store index (suspended = red dot, flagged = amber). */
   stores: Record<number, StoreState>;
+  /** This page may steer the shared run (declare, clock, oracle actions, prices, break-it). */
+  presenter: boolean;
 }
 
 /** One more than the rail shows, so the row that drops off can fade out. */
@@ -62,7 +65,7 @@ export function liveUrl(): string {
  * offset from ping/pong, an external store for React, and a batch stream for the map.
  */
 export class LiveClient {
-  state: LiveState = { link: "connecting", run: null, kpis: null, series: null, merchants: null, feed: [], history: false, error: null, cases: [], stores: {} };
+  state: LiveState = { link: "connecting", run: null, kpis: null, series: null, merchants: null, feed: [], history: false, error: null, cases: [], stores: {}, presenter: false };
   /** Called when the server's play state or speed changes (SimClock.driverChanged). */
   onClock: (() => void) | null = null;
 
@@ -147,18 +150,22 @@ export class LiveClient {
     playing: () => this.clock()?.playing ?? false,
     speed: () => this.clock()?.speed ?? 5760,
     play: () => {
+      if (!this.state.presenter) return;
       this.optimistic({ playing: true });
       this.send({ type: "play" });
     },
     pause: () => {
+      if (!this.state.presenter) return;
       this.optimistic({ playing: false });
       this.send({ type: "pause" });
     },
     setSpeed: (speed) => {
+      if (!this.state.presenter) return;
       this.optimistic({ speed });
       this.send({ type: "speed", speed });
     },
     seek: (t) => {
+      if (!this.state.presenter) return;
       // Hold the playhead where the presenter put it; the server decides once the scrub settles.
       this.optimistic({ t, playing: false });
       clearTimeout(this.seekTimer);
@@ -210,6 +217,8 @@ export class LiveClient {
       this.retry = 0;
       this.samples = [];
       this.set({ link: "open" });
+      const key = presenterKey();
+      if (key) this.send({ type: "auth", key });
       this.ping();
       clearInterval(this.pingTimer);
       this.pingTimer = setInterval(() => this.ping(), 5_000);
@@ -253,8 +262,12 @@ export class LiveClient {
     switch (msg.type) {
       case "hello":
         this.offset = msg.serverTime - Date.now();
-        this.set({ run: msg.run, error: null });
+        // With a stored key, assume presenter until the auth reply says otherwise (no view-only flicker).
+        this.set({ run: msg.run, error: null, presenter: msg.presenter || !!presenterKey() });
         if (msg.clock) this.setServerClock(msg.clock, false, msg.clock.t);
+        return;
+      case "auth":
+        this.set({ presenter: msg.presenter });
         return;
       case "pong": {
         const rtt = Date.now() - msg.client;

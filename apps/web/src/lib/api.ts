@@ -1,6 +1,7 @@
 "use client";
 
-import type { ApiError, ApiRoutes } from "@rescu/live";
+import { type ApiError, type ApiRoutes, PRESENTER_HEADER } from "@rescu/live";
+import { presenterKey } from "./presenter";
 
 /**
  * Dev override: `?server=4200` (a port on this host) or `?server=http://host:4200` points every
@@ -71,6 +72,8 @@ export async function api<R extends keyof ApiRoutes>(route: R, opts: Opts<R> = {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers["content-type"] = "application/json";
   if (opts.token) headers.authorization = `Bearer ${opts.token}`;
+  const key = method !== "GET" ? presenterKey() : null;
+  if (key) headers[PRESENTER_HEADER] = key;
   let res: Response;
   try {
     res = await fetch(`${apiBase()}${path}`, {

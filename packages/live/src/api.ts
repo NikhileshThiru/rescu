@@ -34,6 +34,16 @@ import type {
 } from "./market";
 import type { ActionInput, OracleCase, OracleMetrics } from "./oracle";
 
+/** Metaplex-style JSON behind the relief mint's `uri` (https://rescu.tech/api/token/<declaration id>.json). */
+export interface TokenMetadata {
+  name: string;
+  symbol: string;
+  description: string;
+  image: string;
+  external_url: string;
+  attributes: { trait_type: string; value: string }[];
+}
+
 export interface ApiError {
   error: string;
   /** Stable machine code: "not_found", "unauthorized", "no_run", "over_cap", "closed", "out_of_stock", ... or an on-chain rule name. */
@@ -84,12 +94,22 @@ export interface ApiRoutes {
   "POST /api/oracle/cases/:id/actions": Route<OracleCase, ActionInput>;
   "GET /api/oracle/metrics": Route<OracleMetrics>;
 
+  // ---- Token metadata (the relief mint's on-chain uri points here, for explorers and wallets) ----
+  "GET /api/token/:file": Route<TokenMetadata>;
+
   // ---- Try to break it (Command Center drawer) ----
   "GET /api/breakit": Route<BreakitState>;
   "POST /api/breakit/:id": Route<BreakResult>;
 }
 
 export type ApiRoute = keyof ApiRoutes;
+
+/**
+ * Header carrying the presenter key on the routes that change the shared demo (oracle actions,
+ * price edits at the terminal, "Try to break it"). Without it they answer 403 presenter_only when
+ * the server has a key configured.
+ */
+export const PRESENTER_HEADER = "x-presenter-key";
 
 /** MCP (Streamable HTTP, stateless) lives here; `Authorization: Bearer <Session.token>` picks the resident. */
 export const MCP_PATH = "/mcp";

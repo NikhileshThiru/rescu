@@ -87,6 +87,7 @@ export function OracleConsole() {
   const cases = useLive(live, (s) => s.cases);
   const stores = useLive(live, (s) => s.stores);
   const link = useLive(live, (s) => s.link);
+  const presenter = useLive(live, (s) => s.presenter);
   const now = useNow();
   const runId = run?.id ?? null;
   const active = !!run && (run.phase === "ready" || run.phase === "live" || run.phase === "ended");
@@ -234,7 +235,7 @@ export function OracleConsole() {
               body="The oracle checks every store's prices against nearby stores' pre-storm prices and every resident's spending pattern, every 2 seconds. Raise a price on the Merchant terminal to see a case open."
             />
           ) : (
-            <CaseDetail key={current.id} c={current} stores={stores} frozen={frozen} cluster={run?.explorerCluster ?? null} now={now} ended={run?.phase === "ended"} />
+            <CaseDetail key={current.id} c={current} stores={stores} frozen={frozen} cluster={run?.explorerCluster ?? null} now={now} ended={run?.phase === "ended"} viewOnly={!presenter} />
           )}
         </Panel>
 
@@ -390,6 +391,7 @@ function CaseDetail({
   cluster,
   now,
   ended,
+  viewOnly,
 }: {
   c: OracleCase;
   stores: Record<number, StoreState>;
@@ -397,6 +399,8 @@ function CaseDetail({
   cluster: string | null;
   now: number;
   ended: boolean;
+  /** No presenter key: the case and its actions show, the buttons don't act. */
+  viewOnly: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
   const [busy, setBusy] = useState<Busy>(null);
@@ -485,21 +489,22 @@ function CaseDetail({
       <div className="flex flex-wrap items-center gap-2 px-6 pt-4">
         {merchants.length > 0 &&
           (allSuspended ? (
-            <ActionButton kind="reinstate_merchant" busy={busy} onClick={() => act("reinstate_merchant")} variant="outline" disabled={ended} />
+            <ActionButton kind="reinstate_merchant" busy={busy} onClick={() => act("reinstate_merchant")} variant="outline" disabled={ended || viewOnly} />
           ) : (
-            <ActionButton kind="suspend_merchant" busy={busy} onClick={() => act("suspend_merchant")} variant={wantsSuspend ? "danger" : "outline"} disabled={ended} />
+            <ActionButton kind="suspend_merchant" busy={busy} onClick={() => act("suspend_merchant")} variant={wantsSuspend ? "danger" : "outline"} disabled={ended || viewOnly} />
           ))}
         {residents.length > 0 &&
           (allFrozen ? (
-            <ActionButton kind="unfreeze_wallet" label={`Unfreeze ${walletWord}`} busy={busy} onClick={() => act("unfreeze_wallet")} variant="outline" disabled={ended} />
+            <ActionButton kind="unfreeze_wallet" label={`Unfreeze ${walletWord}`} busy={busy} onClick={() => act("unfreeze_wallet")} variant="outline" disabled={ended || viewOnly} />
           ) : (
-            <ActionButton kind="freeze_wallet" label={`Freeze ${walletWord} on-chain`} busy={busy} onClick={() => act("freeze_wallet")} variant={wantsFreeze ? "danger" : "outline"} disabled={ended} />
+            <ActionButton kind="freeze_wallet" label={`Freeze ${walletWord} on-chain`} busy={busy} onClick={() => act("freeze_wallet")} variant={wantsFreeze ? "danger" : "outline"} disabled={ended || viewOnly} />
           ))}
+        {viewOnly && <span className="text-2xs text-text-3">View only: the presenter acts on cases.</span>}
         <span className="flex-1" />
         {view.status === "dismissed" ? (
-          <ActionButton kind="reopen" busy={busy} onClick={() => act("reopen")} variant="ghost" />
+          <ActionButton kind="reopen" busy={busy} onClick={() => act("reopen")} variant="ghost" disabled={viewOnly} />
         ) : (
-          view.status === "open" && <ActionButton kind="dismiss" busy={busy} onClick={() => act("dismiss")} variant="ghost" />
+          view.status === "open" && <ActionButton kind="dismiss" busy={busy} onClick={() => act("dismiss")} variant="ghost" disabled={viewOnly} />
         )}
       </div>
       <AnimatePresence>

@@ -1,6 +1,6 @@
 import { ActionInput, type ApiRoutes } from "@rescu/live";
 import type { FastifyInstance } from "fastify";
-import type { Services } from "../services.js";
+import { requirePresenter, type Services } from "../services.js";
 import { OracleEngine } from "./engine.js";
 
 type Res<R extends keyof ApiRoutes> = Promise<ApiRoutes[R]["res"]>;
@@ -15,6 +15,7 @@ export async function registerOracle(app: FastifyInstance, s: Services): Promise
   app.get<{ Params: { id: string } }>("/api/oracle/cases/:id", async (req): Res<"GET /api/oracle/cases/:id"> => engine.get(req.params.id));
 
   app.post<{ Params: { id: string } }>("/api/oracle/cases/:id/actions", async (req): Res<"POST /api/oracle/cases/:id/actions"> => {
+    requirePresenter(req);
     const input = ActionInput.parse(req.body ?? {});
     return engine.act(req.params.id, input, "presenter");
   });
