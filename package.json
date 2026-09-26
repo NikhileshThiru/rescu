@@ -10,7 +10,12 @@
     "chain:test": "pnpm chain:build && cargo test -p rescu --lib && NO_DNA=1 anchor test --validator legacy --skip-build",
     "chain:validator": "bash scripts/validator.sh",
     "chain:bench": "pnpm --filter @rescu/chain-tests bench",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "data:prep": "pnpm --filter @rescu/data prep",
+    "data:report": "pnpm --filter @rescu/data report",
+    "db:migrate": "pnpm --filter @rescu/data migrate",
+    "data:load": "pnpm --filter @rescu/data load",
+    "test:model": "pnpm --filter @rescu/aid-model test"
   },
   "devDependencies": {
     "@types/node": "22.20.4",

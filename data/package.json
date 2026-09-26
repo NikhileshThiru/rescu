@@ -1,0 +1,24 @@
+{
+  "name": "@rescu/data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Data pipeline: raw files -> data/out (Python), then wind + allocation -> Tiger (TS).",
+  "scripts": {
+    "prep": "python3 prep/parse_hurdat.py && python3 prep/build_tracts.py && python3 prep/fetch_fema.py",
+    "report": "tsx pipeline/report.ts",
+    "migrate": "tsx pipeline/migrate.ts",
+    "load": "tsx pipeline/load.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rescu/aid-model": "workspace:*",
+    "h3-js": "4.5.0",
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
+  }
+}
