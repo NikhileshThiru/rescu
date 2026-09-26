@@ -1,43 +1,37 @@
-import type { Impact } from "./types.js";
-
 export interface CountyTract {
   countyFips: string;
   households: number;
 }
 
-export interface AutoDeclareRule {
-  /** Declare a county if at least this share of its households saw >= 50 kt... */
-  minShareAt50kt: number;
-  /** ...or any of its tracts saw hurricane-force (64 kt) winds. */
-  anyAt64kt: boolean;
-}
-
-export const DEFAULT_AUTO_DECLARE: AutoDeclareRule = { minShareAt50kt: 0.1, anyAt64kt: true };
-
 /**
- * Stand-in for a FEMA designation when there isn't one (custom storms): counties where the
- * storm plainly did damage. The Declare screen can add or remove counties by hand.
+ * Declares counties from the storm itself at landfall: a county is in when the model expects
+ * at least `minShare` of its households to need help. The threshold is tuned against FEMA's
+ * designations on past storms; officials can still add or remove counties by hand.
  */
-export function autoDeclareCounties(
-  tracts: CountyTract[],
-  impacts: Impact[],
-  rule: AutoDeclareRule = DEFAULT_AUTO_DECLARE,
-): Set<string> {
-  const stats = new Map<string, { hh: number; hh50: number; any64: boolean }>();
+export function autoDeclareCounties(tracts: CountyTract[], need: ArrayLike<number>, minShare: number): Set<string> {
+  const stats = new Map<string, { hh: number; expected: number }>();
   tracts.forEach((t, i) => {
-    const imp = impacts[i]!;
     let s = stats.get(t.countyFips);
     if (!s) {
-      s = { hh: 0, hh50: 0, any64: false };
+      s = { hh: 0, expected: 0 };
       stats.set(t.countyFips, s);
     }
     s.hh += t.households;
-    if (imp.maxKt >= 50) s.hh50 += t.households;
-    if (imp.maxKt >= 64) s.any64 = true;
+    s.expected += t.households * need[i]!;
   });
   const out = new Set<string>();
-  for (const [county, s] of stats) {
-    if ((rule.anyAt64kt && s.any64) || (s.hh > 0 && s.hh50 / s.hh >= rule.minShareAt50kt)) out.add(county);
-  }
+  for (const [county, s] of stats) if (s.hh > 0 && s.expected / s.hh >= minShare) out.add(county);
+  return out;
+}
+
+/** Expected households needing help per county. */
+export function countyNeed(tracts: CountyTract[], need: ArrayLike<number>): Map<string, { households: number; expected: number }> {
+  const out = new Map<string, { households: number; expected: number }>();
+  tracts.forEach((t, i) => {
+    const s = out.get(t.countyFips) ?? { households: 0, expected: 0 };
+    s.households += t.households;
+    s.expected += t.households * need[i]!;
+    out.set(t.countyFips, s);
+  });
   return out;
 }

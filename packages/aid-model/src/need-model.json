@@ -1,0 +1,906 @@
+{
+ "fittedAt": "2026-09-26T04:07:29.872Z",
+ "trainedOn": [
+  "Charley 2004",
+  "Ivan 2004",
+  "Katrina 2005",
+  "Rita 2005",
+  "Wilma 2005",
+  "Gustav 2008",
+  "Ike 2008",
+  "Irene 2011",
+  "Isaac 2012",
+  "Sandy 2012",
+  "Matthew 2016",
+  "Harvey 2017",
+  "Irma 2017",
+  "Florence 2018",
+  "Michael 2018",
+  "Laura 2020",
+  "Sally 2020",
+  "Ida 2021",
+  "Ian 2022",
+  "Idalia 2023",
+  "Beryl 2024",
+  "Helene 2024",
+  "Milton 2024"
+ ],
+ "params": {
+  "windKnots": [
+   25,
+   34,
+   50,
+   64,
+   83,
+   96,
+   113,
+   137
+  ],
+  "windValues": [
+   0,
+   0.000008582074194105461,
+   0.0005017590494127994,
+   0.02644397405532084,
+   0.07491036678366361,
+   0.0967669894086882,
+   0.10180968991222232,
+   0.8697082303264021
+  ],
+  "rainKnots": [
+   2,
+   4,
+   6,
+   8,
+   10,
+   15,
+   20,
+   30
+  ],
+  "rainValues": [
+   0,
+   0.00001725126198962197,
+   0.0003700470566980461,
+   0.0004617103306543655,
+   0.0022661298247561,
+   0.05424806307130315,
+   0.05452191070266918,
+   0.09148963689448569
+  ],
+  "surge": 0.0037167679361071065,
+  "mobile": 3.4597101709827154,
+  "windRain": 0.01308568418452253
+ },
+ "rainModelScale": 1.986276112825564,
+ "declareThreshold": 0.0075,
+ "target": "FEMA Individual & Households Program approvals (owners + renters) per county",
+ "approvalPropensity": 8.977946341517466,
+ "overall": {
+  "hazard": {
+   "median": 0.6405778330134216,
+   "mean": 0.629144411126299
+  },
+  "femaPattern": {
+   "median": 0.6553224699359713,
+   "mean": 0.6347628324549975
+  },
+  "rescuPayout": {
+   "median": 0.6460939485132221,
+   "mean": 0.632304425319392
+  },
+  "modeledRain": {
+   "median": 0.6593393111068832,
+   "mean": 0.6128255167501169
+  },
+  "specRule": {
+   "median": 0.3840809623243454,
+   "mean": 0.4413926261245885
+  }
+ },
+ "validation": {
+  "charley-2004": {
+   "threshold": 0.0075,
+   "studyCounties": 228,
+   "femaApprovedHouseholds": 115285,
+   "scores": {
+    "hazard": {
+     "overlap": 0.7490417800935576,
+     "spearman": 0.4273233549124837
+    },
+    "femaPattern": {
+     "overlap": 0.776701383034098,
+     "spearman": 0.42707135686546743
+    },
+    "rescuPayout": {
+     "overlap": 0.7649000860875018,
+     "spearman": 0.42811294879313444
+    },
+    "modeledRain": {
+     "overlap": 0.7558642986157257,
+     "spearman": 0.46922158807392306
+    },
+    "specRule": {
+     "overlap": 0.541475548616789,
+     "spearman": 0.4956270113789077
+    }
+   },
+   "declare": {
+    "counties": 33,
+    "designatedCounties": 25,
+    "captureOfFemaHouseholds": 0.9883419352040596,
+    "precision": 0.7378783179923264,
+    "recall": 0.7122990804813248,
+    "f1": 0.7248631070464037
+   }
+  },
+  "ivan-2004": {
+   "threshold": 0.0075,
+   "studyCounties": 424,
+   "femaApprovedHouseholds": 199225,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6405778330134216,
+     "spearman": 0.5193712815773482
+    },
+    "femaPattern": {
+     "overlap": 0.6553224699359713,
+     "spearman": 0.4946188484779018
+    },
+    "rescuPayout": {
+     "overlap": 0.6460939485132221,
+     "spearman": 0.5147412045039361
+    },
+    "modeledRain": {
+     "overlap": 0.6255358950939537,
+     "spearman": 0.3799333618677079
+    },
+    "specRule": {
+     "overlap": 0.5503726247941617,
+     "spearman": 0.41380148719650195
+    }
+   },
+   "declare": {
+    "counties": 31,
+    "designatedCounties": 198,
+    "captureOfFemaHouseholds": 0.7524557660936128,
+    "precision": 1,
+    "recall": 0.09363844872994798,
+    "f1": 0.17124205689492927
+   }
+  },
+  "katrina-2005": {
+   "threshold": 0.0075,
+   "studyCounties": 435,
+   "femaApprovedHouseholds": 1059078,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6108886782910794,
+     "spearman": 0.6626343303147968
+    },
+    "femaPattern": {
+     "overlap": 0.5844434603787713,
+     "spearman": 0.6687668382169093
+    },
+    "rescuPayout": {
+     "overlap": 0.6011506298950896,
+     "spearman": 0.6652103862358474
+    },
+    "modeledRain": {
+     "overlap": 0.3894644718786379,
+     "spearman": 0.6910102045129852
+    },
+    "specRule": {
+     "overlap": 0.41793278227996017,
+     "spearman": 0.7833832712892472
+    }
+   },
+   "declare": {
+    "counties": 56,
+    "designatedCounties": 88,
+    "captureOfFemaHouseholds": 0.9439418059859613,
+    "precision": 0.4557446614811945,
+    "recall": 0.6344144236567696,
+    "f1": 0.5304381547426188
+   }
+  },
+  "rita-2005": {
+   "threshold": 0.0075,
+   "studyCounties": 251,
+   "femaApprovedHouseholds": 425976,
+   "scores": {
+    "hazard": {
+     "overlap": 0.8143247669473026,
+     "spearman": 0.6153533264132238
+    },
+    "femaPattern": {
+     "overlap": 0.7934036058862174,
+     "spearman": 0.6093042847757413
+    },
+    "rescuPayout": {
+     "overlap": 0.8059918809190771,
+     "spearman": 0.613681910296954
+    },
+    "modeledRain": {
+     "overlap": 0.7763515014971326,
+     "spearman": 0.6501280098445714
+    },
+    "specRule": {
+     "overlap": 0.36182461728531246,
+     "spearman": 0.7055803984400345
+    }
+   },
+   "declare": {
+    "counties": 30,
+    "designatedCounties": 44,
+    "captureOfFemaHouseholds": 0.8806059496309652,
+    "precision": 0.887164379130274,
+    "recall": 0.21570116769990927,
+    "f1": 0.34702760108913017
+   }
+  },
+  "wilma-2005": {
+   "threshold": 0.0075,
+   "studyCounties": 35,
+   "femaApprovedHouseholds": 226879,
+   "scores": {
+    "hazard": {
+     "overlap": 0.7246783258956363,
+     "spearman": 0.8233870329554202
+    },
+    "femaPattern": {
+     "overlap": 0.7811617212731847,
+     "spearman": 0.8224179623007061
+    },
+    "rescuPayout": {
+     "overlap": 0.7475313849937217,
+     "spearman": 0.8229024976280631
+    },
+    "modeledRain": {
+     "overlap": 0.736309123947998,
+     "spearman": 0.8253251742648484
+    },
+    "specRule": {
+     "overlap": 0.631805972766266,
+     "spearman": 0.8041790525871465
+    }
+   },
+   "declare": {
+    "counties": 18,
+    "designatedCounties": 13,
+    "captureOfFemaHouseholds": 1,
+    "precision": 0.9050499458038944,
+    "recall": 1,
+    "f1": 0.9501587586166732
+   }
+  },
+  "gustav-2008": {
+   "threshold": 0.0075,
+   "studyCounties": 294,
+   "femaApprovedHouseholds": 73045,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6736536097128784,
+     "spearman": 0.6592617826086454
+    },
+    "femaPattern": {
+     "overlap": 0.6684598148592322,
+     "spearman": 0.6592158774092749
+    },
+    "rescuPayout": {
+     "overlap": 0.6718647469775215,
+     "spearman": 0.6594109745065994
+    },
+    "modeledRain": {
+     "overlap": 0.6354044084699699,
+     "spearman": 0.6818968131477935
+    },
+    "specRule": {
+     "overlap": 0.5751204103379722,
+     "spearman": 0.6996367288911364
+    }
+   },
+   "declare": {
+    "counties": 51,
+    "designatedCounties": 58,
+    "captureOfFemaHouseholds": 0.9576973098774728,
+    "precision": 0.9777752121846768,
+    "recall": 0.8644082870257075,
+    "f1": 0.9176034815457106
+   }
+  },
+  "ike-2008": {
+   "threshold": 0.0075,
+   "studyCounties": 935,
+   "femaApprovedHouseholds": 133565,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6346232140071095,
+     "spearman": 0.35868947185887584
+    },
+    "femaPattern": {
+     "overlap": 0.6369294060204569,
+     "spearman": 0.36569732308313474
+    },
+    "rescuPayout": {
+     "overlap": 0.6355728469909113,
+     "spearman": 0.3618647143713334
+    },
+    "modeledRain": {
+     "overlap": 0.6807697940743634,
+     "spearman": 0.3831319969279003
+    },
+    "specRule": {
+     "overlap": 0.3224069815649818,
+     "spearman": 0.3403488996387455
+    }
+   },
+   "declare": {
+    "counties": 37,
+    "designatedCounties": 54,
+    "captureOfFemaHouseholds": 0.9402612959982031,
+    "precision": 0.920155927233148,
+    "recall": 0.7689332205191247,
+    "f1": 0.8377751540807552
+   }
+  },
+  "irene-2011": {
+   "threshold": 0.0075,
+   "studyCounties": 307,
+   "femaApprovedHouseholds": 105236,
+   "scores": {
+    "hazard": {
+     "overlap": 0.44240525894705973,
+     "spearman": 0.5151042518213282
+    },
+    "femaPattern": {
+     "overlap": 0.4271115111320908,
+     "spearman": 0.5275632916899129
+    },
+    "rescuPayout": {
+     "overlap": 0.43838181981795316,
+     "spearman": 0.5217052514030481
+    },
+    "modeledRain": {
+     "overlap": 0.417704419480561,
+     "spearman": 0.5075158291973798
+    },
+    "specRule": {
+     "overlap": 0.38097803928022717,
+     "spearman": 0.47839681935502215
+    }
+   },
+   "declare": {
+    "counties": 95,
+    "designatedCounties": 114,
+    "captureOfFemaHouseholds": 0.8523984187920484,
+    "precision": 0.8357264734423374,
+    "recall": 0.7825750768787442,
+    "f1": 0.8082779245610651
+   }
+  },
+  "isaac-2012": {
+   "threshold": 0.01,
+   "studyCounties": 319,
+   "femaApprovedHouseholds": 51934,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6254802012526518,
+     "spearman": 0.5758492027149941
+    },
+    "femaPattern": {
+     "overlap": 0.6316804765845474,
+     "spearman": 0.5777153504207365
+    },
+    "rescuPayout": {
+     "overlap": 0.6278910953597777,
+     "spearman": 0.5768470568544659
+    },
+    "modeledRain": {
+     "overlap": 0.6635116428706656,
+     "spearman": 0.6087007617534329
+    },
+    "specRule": {
+     "overlap": 0.3316775245106416,
+     "spearman": 0.6213225459146217
+    }
+   },
+   "declare": {
+    "counties": 37,
+    "designatedCounties": 48,
+    "captureOfFemaHouseholds": 0.9630107444063619,
+    "precision": 0.6283266055994134,
+    "recall": 0.8370976887352846,
+    "f1": 0.7178409029406001
+   }
+  },
+  "sandy-2012": {
+   "threshold": 0.0075,
+   "studyCounties": 722,
+   "femaApprovedHouseholds": 179465,
+   "scores": {
+    "hazard": {
+     "overlap": 0.3393539489996963,
+     "spearman": 0.31800530533486326
+    },
+    "femaPattern": {
+     "overlap": 0.3560705308740524,
+     "spearman": 0.317994595920565
+    },
+    "rescuPayout": {
+     "overlap": 0.34522876386878726,
+     "spearman": 0.3190659657269629
+    },
+    "modeledRain": {
+     "overlap": 0.3596358851726248,
+     "spearman": 0.3334659298677171
+    },
+    "specRule": {
+     "overlap": 0.2123552291199273,
+     "spearman": 0.30215147187281727
+    }
+   },
+   "declare": {
+    "counties": 111,
+    "designatedCounties": 38,
+    "captureOfFemaHouseholds": 0.9971916529685454,
+    "precision": 0.5309587778757104,
+    "recall": 0.951407451006334,
+    "f1": 0.6815564569750661
+   }
+  },
+  "matthew-2016": {
+   "threshold": 0.0075,
+   "studyCounties": 232,
+   "femaApprovedHouseholds": 49459,
+   "scores": {
+    "hazard": {
+     "overlap": 0.3839142593077206,
+     "spearman": 0.7427097472405522
+    },
+    "femaPattern": {
+     "overlap": 0.40936555736795915,
+     "spearman": 0.762533878571316
+    },
+    "rescuPayout": {
+     "overlap": 0.39630029875689526,
+     "spearman": 0.7506960275571415
+    },
+    "modeledRain": {
+     "overlap": 0.3155846317897843,
+     "spearman": 0.664816246884137
+    },
+    "specRule": {
+     "overlap": 0.31250319106788116,
+     "spearman": 0.49032373017583203
+    }
+   },
+   "declare": {
+    "counties": 65,
+    "designatedCounties": 95,
+    "captureOfFemaHouseholds": 0.8883519682969733,
+    "precision": 0.8944033004316614,
+    "recall": 0.703035765865521,
+    "f1": 0.7872569571860505
+   }
+  },
+  "harvey-2017": {
+   "threshold": 0.0075,
+   "studyCounties": 320,
+   "femaApprovedHouseholds": 372417,
+   "scores": {
+    "hazard": {
+     "overlap": 0.7850472125040254,
+     "spearman": 0.5679602277253446
+    },
+    "femaPattern": {
+     "overlap": 0.7883602297818092,
+     "spearman": 0.5697794449054763
+    },
+    "rescuPayout": {
+     "overlap": 0.786636695824471,
+     "spearman": 0.5704924657042071
+    },
+    "modeledRain": {
+     "overlap": 0.7084815769044236,
+     "spearman": 0.566543003609447
+    },
+    "specRule": {
+     "overlap": 0.6798829478033832,
+     "spearman": 0.7396894312002433
+    }
+   },
+   "declare": {
+    "counties": 56,
+    "designatedCounties": 41,
+    "captureOfFemaHouseholds": 0.9988480654749917,
+    "precision": 0.9103551393594782,
+    "recall": 0.9962026869614963,
+    "f1": 0.9513461625962145
+   }
+  },
+  "irma-2017": {
+   "threshold": 0.0075,
+   "studyCounties": 385,
+   "femaApprovedHouseholds": 783615,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6999058806203844,
+     "spearman": 0.6059084341517365
+    },
+    "femaPattern": {
+     "overlap": 0.727810941671934,
+     "spearman": 0.6056875775472957
+    },
+    "rescuPayout": {
+     "overlap": 0.7109528899703196,
+     "spearman": 0.6057921757838709
+    },
+    "modeledRain": {
+     "overlap": 0.6593393111068832,
+     "spearman": 0.5978920938896229
+    },
+    "specRule": {
+     "overlap": 0.5953558597879227,
+     "spearman": 0.5945310078289392
+    }
+   },
+   "declare": {
+    "counties": 57,
+    "designatedCounties": 56,
+    "captureOfFemaHouseholds": 0.9935478519425993,
+    "precision": 0.9968874171425701,
+    "recall": 0.9799473040038733,
+    "f1": 0.9883447780173606
+   }
+  },
+  "florence-2018": {
+   "threshold": 0.0075,
+   "studyCounties": 206,
+   "femaApprovedHouseholds": 39825,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6997356621917041,
+     "spearman": 0.6824018306605604
+    },
+    "femaPattern": {
+     "overlap": 0.7237578562777921,
+     "spearman": 0.6802613835885649
+    },
+    "rescuPayout": {
+     "overlap": 0.7093580765420728,
+     "spearman": 0.6815846577009558
+    },
+    "modeledRain": {
+     "overlap": 0.5860204848153567,
+     "spearman": 0.6163642426600004
+    },
+    "specRule": {
+     "overlap": 0.5246247894350601,
+     "spearman": 0.636761357138458
+    }
+   },
+   "declare": {
+    "counties": 39,
+    "designatedCounties": 42,
+    "captureOfFemaHouseholds": 0.9930696798493409,
+    "precision": 0.9836227645950811,
+    "recall": 0.7194594688641104,
+    "f1": 0.8310540711129814
+   }
+  },
+  "michael-2018": {
+   "threshold": 0.015,
+   "studyCounties": 390,
+   "femaApprovedHouseholds": 36416,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6049074084389137,
+     "spearman": 0.44736279295161197
+    },
+    "femaPattern": {
+     "overlap": 0.6372269643528629,
+     "spearman": 0.4497637244062566
+    },
+    "rescuPayout": {
+     "overlap": 0.6186187204485585,
+     "spearman": 0.4479038898342822
+    },
+    "modeledRain": {
+     "overlap": 0.5892008179499753,
+     "spearman": 0.4511896032393222
+    },
+    "specRule": {
+     "overlap": 0.13334803857563204,
+     "spearman": 0.43649476676968435
+    }
+   },
+   "declare": {
+    "counties": 63,
+    "designatedCounties": 32,
+    "captureOfFemaHouseholds": 0.9949472759226714,
+    "precision": 0.3283466982303767,
+    "recall": 0.911144663997024,
+    "f1": 0.48273243549842826
+   }
+  },
+  "laura-2020": {
+   "threshold": 0.0075,
+   "studyCounties": 241,
+   "femaApprovedHouseholds": 76087,
+   "scores": {
+    "hazard": {
+     "overlap": 0.8591008406096096,
+     "spearman": 0.4516021912524462
+    },
+    "femaPattern": {
+     "overlap": 0.830545683415476,
+     "spearman": 0.45118333275467926
+    },
+    "rescuPayout": {
+     "overlap": 0.8490830539916814,
+     "spearman": 0.4513629687212948
+    },
+    "modeledRain": {
+     "overlap": 0.8599050022349545,
+     "spearman": 0.4733953012213813
+    },
+    "specRule": {
+     "overlap": 0.3777484218608126,
+     "spearman": 0.49479654830807684
+    }
+   },
+   "declare": {
+    "counties": 24,
+    "designatedCounties": 21,
+    "captureOfFemaHouseholds": 0.9468503160855337,
+    "precision": 0.6671299134246391,
+    "recall": 0.6538873856726921,
+    "f1": 0.6604422747398797
+   }
+  },
+  "sally-2020": {
+   "threshold": 0.005,
+   "studyCounties": 396,
+   "femaApprovedHouseholds": 31336,
+   "scores": {
+    "hazard": {
+     "overlap": 0.499025279060019,
+     "spearman": 0.24159378513180413
+    },
+    "femaPattern": {
+     "overlap": 0.4890834465868205,
+     "spearman": 0.24129088151335676
+    },
+    "rescuPayout": {
+     "overlap": 0.5011885414825481,
+     "spearman": 0.24129008857194723
+    },
+    "modeledRain": {
+     "overlap": 0.6242671148161392,
+     "spearman": 0.25108457232207426
+    },
+    "specRule": {
+     "overlap": 0.347867254945115,
+     "spearman": 0.4366026134167274
+    }
+   },
+   "declare": {
+    "counties": 30,
+    "designatedCounties": 8,
+    "captureOfFemaHouseholds": 1,
+    "precision": 0.6941980477476024,
+    "recall": 1,
+    "f1": 0.8195004694646212
+   }
+  },
+  "ida-2021": {
+   "threshold": 0.0075,
+   "studyCounties": 528,
+   "femaApprovedHouseholds": 696730,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6282205915203448,
+     "spearman": 0.5101098244190251
+    },
+    "femaPattern": {
+     "overlap": 0.6265710556893833,
+     "spearman": 0.4897025816367765
+    },
+    "rescuPayout": {
+     "overlap": 0.6293584991492616,
+     "spearman": 0.5064619865105503
+    },
+    "modeledRain": {
+     "overlap": 0.7491188161874338,
+     "spearman": 0.47025009631579395
+    },
+    "specRule": {
+     "overlap": 0.3840809623243454,
+     "spearman": 0.5697769144073448
+    }
+   },
+   "declare": {
+    "counties": 24,
+    "designatedCounties": 63,
+    "captureOfFemaHouseholds": 0.7202058186097915,
+    "precision": 1,
+    "recall": 0.10006095841536534,
+    "f1": 0.1819189339461749
+   }
+  },
+  "ian-2022": {
+   "threshold": 0.005,
+   "studyCounties": 184,
+   "femaApprovedHouseholds": 388190,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6659917379834313,
+     "spearman": 0.6066975974492554
+    },
+    "femaPattern": {
+     "overlap": 0.6918503205295712,
+     "spearman": 0.6009204218551186
+    },
+    "rescuPayout": {
+     "overlap": 0.6762529357105198,
+     "spearman": 0.6053064584260616
+    },
+    "modeledRain": {
+     "overlap": 0.668166611878937,
+     "spearman": 0.607198771988179
+    },
+    "specRule": {
+     "overlap": 0.5084880813526697,
+     "spearman": 0.5925037009769394
+    }
+   },
+   "declare": {
+    "counties": 31,
+    "designatedCounties": 29,
+    "captureOfFemaHouseholds": 0.9387542182951647,
+    "precision": 0.8920093963198642,
+    "recall": 0.723213680094969,
+    "f1": 0.7987917057545778
+   }
+  },
+  "idalia-2023": {
+   "threshold": 0.0075,
+   "studyCounties": 226,
+   "femaApprovedHouseholds": 37431,
+   "scores": {
+    "hazard": {
+     "overlap": 0.3134986687932192,
+     "spearman": 0.3280319140703383
+    },
+    "femaPattern": {
+     "overlap": 0.3228702706300717,
+     "spearman": 0.31198087147280446
+    },
+    "rescuPayout": {
+     "overlap": 0.31752370053018114,
+     "spearman": 0.32252768047745484
+    },
+    "modeledRain": {
+     "overlap": 0.3180797948590481,
+     "spearman": 0.33206507475301306
+    },
+    "specRule": {
+     "overlap": 0.21908664665625663,
+     "spearman": 0.3229180224124143
+    }
+   },
+   "declare": {
+    "counties": 45,
+    "designatedCounties": 23,
+    "captureOfFemaHouseholds": 0.5832598648179317,
+    "precision": 0.21634880206396212,
+    "recall": 0.06918595022658497,
+    "f1": 0.10484396264275049
+   }
+  },
+  "beryl-2024": {
+   "threshold": 0.0075,
+   "studyCounties": 186,
+   "femaApprovedHouseholds": 739919,
+   "scores": {
+    "hazard": {
+     "overlap": 0.9180532220157384,
+     "spearman": 0.5251538329577445
+    },
+    "femaPattern": {
+     "overlap": 0.9031124737104249,
+     "spearman": 0.5240132712831661
+    },
+    "rescuPayout": {
+     "overlap": 0.9126532261054378,
+     "spearman": 0.5251405319469623
+    },
+    "modeledRain": {
+     "overlap": 0.9233415800987035,
+     "spearman": 0.5412497007918027
+    },
+    "specRule": {
+     "overlap": 0.9391730044372858,
+     "spearman": 0.6763664427902624
+    }
+   },
+   "declare": {
+    "counties": 12,
+    "designatedCounties": 22,
+    "captureOfFemaHouseholds": 0.9488133160521625,
+    "precision": 0.9961620842683563,
+    "recall": 0.8948396495490198,
+    "f1": 0.9427863702496264
+   }
+  },
+  "helene-2024": {
+   "threshold": 0.005,
+   "studyCounties": 762,
+   "femaApprovedHouseholds": 815640,
+   "scores": {
+    "hazard": {
+     "overlap": 0.45915784153394007,
+     "spearman": 0.6283477973610738
+    },
+    "femaPattern": {
+     "overlap": 0.4552357175177776,
+     "spearman": 0.6205436165882207
+    },
+    "rescuPayout": {
+     "overlap": 0.45789421289559207,
+     "spearman": 0.6251071145157322
+    },
+    "modeledRain": {
+     "overlap": 0.3737259059116369,
+     "spearman": 0.4851238497091925
+    },
+    "specRule": {
+     "overlap": 0.2954164598071212,
+     "spearman": 0.5397383194763756
+    }
+   },
+   "declare": {
+    "counties": 141,
+    "designatedCounties": 188,
+    "captureOfFemaHouseholds": 0.8005995292040606,
+    "precision": 0.7533048681405565,
+    "recall": 0.4954072598778654,
+    "f1": 0.5977241546782898
+   }
+  },
+  "milton-2024": {
+   "threshold": 0.0075,
+   "studyCounties": 83,
+   "femaApprovedHouseholds": 301346,
+   "scores": {
+    "hazard": {
+     "overlap": 0.6987352341654329,
+     "spearman": 0.8648569767474924
+    },
+    "femaPattern": {
+     "overlap": 0.6824702489544393,
+     "spearman": 0.8636087489884483
+    },
+    "rescuPayout": {
+     "overlap": 0.6925737275149161,
+     "spearman": 0.8648098738131889
+    },
+    "modeledRain": {
+     "overlap": 0.6792037955977801,
+     "spearman": 0.8645272562073676
+    },
+    "specRule": {
+     "overlap": 0.508505012255812,
+     "spearman": 0.8109652363407969
+    }
+   },
+   "declare": {
+    "counties": 27,
+    "designatedCounties": 34,
+    "captureOfFemaHouseholds": 0.9879341355120028,
+    "precision": 1,
+    "recall": 0.7738144026610355,
+    "f1": 0.8724863226955165
+   }
+  }
+ }
+}

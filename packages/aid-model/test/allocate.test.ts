@@ -1,24 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { aggregateHexes, allocate, type AllocationInput, type Band, DEFAULT_ALLOCATION, type Impact, tractTotalCents } from "../src/index.js";
+import {
+  aggregateHexes,
+  allocate,
+  type AllocationInput,
+  type Band,
+  DEFAULT_ALLOCATION,
+  type Impact,
+  specNeed,
+  summarize,
+  tractTotalCents,
+} from "../src/index.js";
+import { rng } from "./helpers.js";
 
-/** Deterministic PRNG so failures reproduce. */
-function rng(seed: number) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function synthetic(n: number, seed: number, bandWeights = [0.3, 0.35, 0.2, 0.1, 0.05]): AllocationInput[] {
+/** Tracts with a skewed need distribution: most barely touched, a few devastated. */
+function synthetic(n: number, seed: number, severity = 1): AllocationInput[] {
   const r = rng(seed);
-  return Array.from({ length: n }, () => {
-    let x = r();
-    let band = 0;
-    while (band < 4 && x > bandWeights[band]!) x -= bandWeights[band++]!;
-    return { households: 50 + Math.floor(r() * 3_000), svi: r(), band: band as Band };
-  });
+  return Array.from({ length: n }, () => ({
+    households: 50 + Math.floor(r() * 3_000),
+    svi: r(),
+    need: Math.min(0.95, r() ** (3 / severity)),
+  }));
 }
 
 function check(tracts: AllocationInput[], params = DEFAULT_ALLOCATION) {
@@ -43,8 +44,7 @@ function check(tracts: AllocationInput[], params = DEFAULT_ALLOCATION) {
 describe("allocate (the aid model)", () => {
   it("averages exactly the mean, keeps every household in [$250, $2,000], and spends the whole pot", () => {
     for (const seed of [1, 2, 3, 42, 2024]) {
-      const tracts = synthetic(5_000, seed);
-      const { a, total, households } = check(tracts);
+      const { a, total, households } = check(synthetic(5_000, seed));
       expect(households).toBe(a.eligibleHouseholds);
       expect(total).toBe(a.potCents);
       expect(a.potCents).toBe(households * 100_000);
@@ -52,54 +52,68 @@ describe("allocate (the aid model)", () => {
     }
   });
 
-  it("gives nothing below the eligibility threshold or outside the declared area", () => {
+  it("gives nothing below the minimum need or outside the declared area", () => {
     const tracts: AllocationInput[] = [
-      { households: 100, svi: 0.9, band: 0 },
-      { households: 100, svi: 0.9, band: 1 },
-      { households: 100, svi: 0.9, band: 4, declared: false },
-      { households: 100, svi: 0.5, band: 3 },
+      { households: 100, svi: 0.9, need: 0 },
+      { households: 100, svi: 0.9, need: DEFAULT_ALLOCATION.minNeed / 2 },
+      { households: 100, svi: 0.9, need: 0.8, declared: false },
+      { households: 100, svi: 0.5, need: 0.3 },
     ];
-    const a = allocate(tracts, { ...DEFAULT_ALLOCATION, minBand: 2 });
+    const a = allocate(tracts);
     expect([a.cents[0], a.cents[1], a.cents[2]]).toEqual([0, 0, 0]);
     expect(a.cents[3]).toBe(100_000); // the only eligible tract gets exactly the mean
     expect(a.eligibleHouseholds).toBe(100);
   });
 
-  it("pays more for stronger wind and for higher vulnerability", () => {
+  it("pays more where need is higher and where vulnerability is higher", () => {
     const tracts: AllocationInput[] = [
-      { households: 1_000, svi: 0.5, band: 1 },
-      { households: 1_000, svi: 0.5, band: 2 },
-      { households: 1_000, svi: 0.5, band: 3 },
-      { households: 1_000, svi: 0.5, band: 4 },
-      { households: 1_000, svi: 0.1, band: 2 },
-      { households: 1_000, svi: 0.9, band: 2 },
+      { households: 1_000, svi: 0.5, need: 0.05 },
+      { households: 1_000, svi: 0.5, need: 0.15 },
+      { households: 1_000, svi: 0.5, need: 0.3 },
+      { households: 1_000, svi: 0.1, need: 0.15 },
+      { households: 1_000, svi: 0.9, need: 0.15 },
     ];
     const { a } = check(tracts);
     expect(a.cents[0]!).toBeLessThan(a.cents[1]!);
     expect(a.cents[1]!).toBeLessThan(a.cents[2]!);
-    expect(a.cents[2]!).toBeLessThanOrEqual(a.cents[3]!);
-    expect(a.cents[4]!).toBeLessThan(a.cents[1]!);
-    expect(a.cents[1]!).toBeLessThan(a.cents[5]!);
+    expect(a.cents[3]!).toBeLessThan(a.cents[1]!);
+    expect(a.cents[1]!).toBeLessThan(a.cents[4]!);
   });
 
-  it("clamps and redistributes when most households sit at the extremes", () => {
-    // Mostly light wind plus a small, severe core: the core hits the cap, the rest absorb it.
-    const tracts = synthetic(3_000, 7, [0, 0.9, 0.05, 0.03, 0.02]);
-    const { a, total } = check(tracts);
-    expect(total).toBe(a.potCents);
-    expect(a.householdsAtMax).toBeGreaterThan(0);
-    // Mostly severe: many at the cap would overshoot, so the floor tracts absorb it instead.
-    const severe = synthetic(3_000, 8, [0, 0.05, 0.05, 0.2, 0.7]);
-    const s = check(severe);
-    expect(s.total).toBe(s.a.potCents);
+  it("clamps and redistributes when need is extremely skewed either way", () => {
+    for (const severity of [0.3, 1, 3, 10]) {
+      const { a, total } = check(synthetic(3_000, 7, severity));
+      expect(total).toBe(a.potCents);
+    }
+    const { a } = check(synthetic(3_000, 11, 0.3));
+    expect(a.householdsAtMax + a.householdsAtMin).toBeGreaterThan(0);
+  });
+
+  it("lets a county an official added by hand qualify through the need floor", () => {
+    const tracts: AllocationInput[] = [
+      { households: 100, svi: 0.5, need: 0, needFloor: 0.05 },
+      { households: 100, svi: 0.5, need: 0 },
+      { households: 100, svi: 0.5, need: 0.4 },
+    ];
+    const a = allocate(tracts);
+    expect(a.cents[0]).toBeGreaterThan(0);
+    expect(a.cents[1]).toBe(0);
+    expect(a.cents[0]!).toBeLessThan(a.cents[2]!);
   });
 
   it("handles a single tract and an empty disaster", () => {
-    const one = allocate([{ households: 7, svi: 0.3, band: 4 }]);
-    expect(one.cents[0]).toBe(100_000);
-    const none = allocate([{ households: 7, svi: 0.3, band: 0 }]);
+    expect(allocate([{ households: 7, svi: 0.3, need: 0.5 }]).cents[0]).toBe(100_000);
+    const none = allocate([{ households: 7, svi: 0.3, need: 0 }]);
     expect(none.potCents).toBe(0);
     expect(none.eligibleHouseholds).toBe(0);
+  });
+
+  it("keeps the spec's band weights available as a baseline", () => {
+    expect([0, 1, 2, 3, 4].map((b) => specNeed(b as Band))).toEqual([0, 0.3, 0.6, 1.0, 1.5]);
+    const tracts = [1, 2, 3, 4].map((b) => ({ households: 100, svi: 0.5, need: specNeed(b as Band) }));
+    const s = summarize(tracts, allocate(tracts), ["a", "b", "c", "d"]);
+    expect(s.byGroup).toHaveLength(4);
+    expect(s.meanAidUsd).toBeCloseTo(1_000, 6);
   });
 
   it("is resolution-independent: hex totals equal the pot at every H3 size", () => {
@@ -110,31 +124,12 @@ describe("allocate (the aid model)", () => {
       households: 100 + Math.floor(r() * 2_000),
       svi: r(),
     }));
-    const impacts: Impact[] = tracts.map(() => {
-      const maxKt = 20 + r() * 110;
-      return { maxKt, band: (maxKt >= 96 ? 4 : maxKt >= 64 ? 3 : maxKt >= 50 ? 2 : maxKt >= 34 ? 1 : 0) as Band, peakT: 0, t34: null, t50: null, t64: null };
-    });
-    const a = allocate(tracts.map((t, i) => ({ households: t.households, svi: t.svi, band: impacts[i]!.band })));
+    const impacts: Impact[] = tracts.map(() => ({ maxKt: 20 + r() * 110, band: 0, peakT: 0, t34: null, t50: null, t64: null }));
+    const a = allocate(tracts.map((t) => ({ households: t.households, svi: t.svi, need: r() * 0.5 })));
     for (const res of [3, 4, 5, 6]) {
       const hexes = aggregateHexes(tracts, impacts, a, res);
       expect(hexes.reduce((s, h) => s + h.aidCents, 0)).toBe(a.potCents);
       expect(hexes.reduce((s, h) => s + h.eligibleHouseholds, 0)).toBe(a.eligibleHouseholds);
     }
-  });
-});
-
-describe("declared areas", () => {
-  it("lets FEMA-designated tracts below the wind threshold qualify at the floor band", () => {
-    const tracts: AllocationInput[] = [
-      { households: 100, svi: 0.5, band: 0, declared: true }, // flooded, calm wind
-      { households: 100, svi: 0.5, band: 0 }, // not declared, calm
-      { households: 100, svi: 0.5, band: 3, declared: true },
-    ];
-    const a = allocate(tracts);
-    expect(a.cents[0]).toBeGreaterThan(0);
-    expect(a.cents[1]).toBe(0);
-    expect(a.cents[0]!).toBeLessThan(a.cents[2]!);
-    const strict = allocate(tracts, { ...DEFAULT_ALLOCATION, declaredFloorBand: null });
-    expect(strict.cents[0]).toBe(0);
   });
 });

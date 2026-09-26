@@ -5,46 +5,50 @@ export interface AllocationParams {
   meanAid: number;
   minAid: number;
   maxAid: number;
-  /** Lowest wind band that qualifies (1 = 34 kt tropical storm, 2 = 50 kt, 3 = hurricane). */
-  minBand: Exclude<Band, 0>;
-  /** Weight per band: 34 kt, 50 kt, 64 kt, major core. */
-  windFactor: Record<Exclude<Band, 0>, number>;
-  /** Vulnerability multiplier = sviBase + sviSlope x SVI (0.7 to 1.3 by default). */
+  /**
+   * Tracts whose need (share of households expected to need help) is below this get nothing.
+   * 2% was the best cutoff on the 20 training storms (dollar split closest to FEMA's approvals);
+   * lower pays whole big cities on a storm's edge, higher drops wide storm-soaked areas.
+   */
+  minNeed: number;
+  /** Vulnerability multiplier = sviBase + sviSlope x SVI (0.7 to 1.3 by default). A policy choice. */
   sviBase: number;
   sviSlope: number;
-  /**
-   * Inside a declared county, tracts whose modeled wind falls below `minBand` still qualify at
-   * this band: a FEMA designation means damage was confirmed (e.g. Helene's flooding in western
-   * North Carolina, which a wind model can't see). null disables it.
-   */
-  declaredFloorBand: Exclude<Band, 0> | null;
 }
 
 export const DEFAULT_ALLOCATION: AllocationParams = {
   meanAid: 1_000,
   minAid: 250,
   maxAid: 2_000,
-  minBand: 1,
-  windFactor: { 1: 0.3, 2: 0.6, 3: 1.0, 4: 1.5 },
+  minNeed: 0.02,
   sviBase: 0.7,
   sviSlope: 0.6,
-  declaredFloorBand: 1,
 };
 
 export interface AllocationInput {
   households: number;
   svi: number;
-  band: Band;
-  /** Inside the declared disaster area (e.g. a FEMA Individual Assistance county). Default true. */
+  /** Expected share of households needing help, 0 to 1 (need.ts). */
+  need: number;
+  /** Inside the declared disaster area. Default true. */
   declared?: boolean;
+  /**
+   * Floor on need for counties an official added by hand (the model missed the hazard there,
+   * e.g. a landslide), so their households still qualify.
+   */
+  needFloor?: number;
 }
+
+/** The spec's original band weights (34 / 50 / 64 kt / major), kept as a baseline to compare against. */
+export const SPEC_WIND_FACTOR: Record<Exclude<Band, 0>, number> = { 1: 0.3, 2: 0.6, 3: 1.0, 4: 1.5 };
+export const specNeed = (band: Band) => (band === 0 ? 0 : SPEC_WIND_FACTOR[band]);
 
 export interface Allocation {
   /** Per tract: base aid per household in cents (0 = not eligible). */
   cents: Int32Array;
   /** Per tract: how many of its households get one extra cent, so the total hits the pot exactly. */
   extraCent: Int32Array;
-  /** Per tract: the need score s = wind factor x (sviBase + sviSlope x SVI). */
+  /** Per tract: the score s = need x (sviBase + sviSlope x SVI). */
   score: Float64Array;
   eligibleHouseholds: number;
   eligibleTracts: number;
@@ -56,12 +60,12 @@ export interface Allocation {
   householdsAtMax: number;
 }
 
-/** Need score for one tract; 0 if it doesn't qualify. */
+/** Allocation score for one tract (need x vulnerability); 0 if it doesn't qualify. */
 export function needScore(t: AllocationInput, p: AllocationParams): number {
   if (t.declared === false || t.households <= 0) return 0;
-  const band = t.declared === true && p.declaredFloorBand !== null ? Math.max(t.band, p.declaredFloorBand) : t.band;
-  if (band < p.minBand) return 0;
-  return p.windFactor[band as Exclude<Band, 0>] * (p.sviBase + p.sviSlope * t.svi);
+  const need = Math.max(t.need, t.needFloor ?? 0);
+  if (need < p.minNeed) return 0;
+  return need * (p.sviBase + p.sviSlope * t.svi);
 }
 
 /**
@@ -165,11 +169,12 @@ export interface AllocationSummary {
   medianAidUsd: number;
   householdsAtMin: number;
   householdsAtMax: number;
-  byBand: { band: Band; households: number; totalUsd: number; meanAidUsd: number }[];
+  /** Totals per caller-supplied group (e.g. dominant hazard or wind band). */
+  byGroup: { group: string; households: number; totalUsd: number; meanAidUsd: number }[];
 }
 
-export function summarize(tracts: AllocationInput[], a: Allocation): AllocationSummary {
-  const byBand = new Map<Band, { households: number; cents: number }>();
+export function summarize(tracts: AllocationInput[], a: Allocation, groups?: string[]): AllocationSummary {
+  const byGroup = new Map<string, { households: number; cents: number }>();
   const perHousehold: { aid: number; households: number }[] = [];
   let min = Infinity;
   let max = 0;
@@ -178,10 +183,11 @@ export function summarize(tracts: AllocationInput[], a: Allocation): AllocationS
     if (a.score[i]! <= 0) return;
     const c = tractTotalCents(a, i, t.households);
     totalCents += c;
-    const b = byBand.get(t.band) ?? { households: 0, cents: 0 };
-    b.households += t.households;
-    b.cents += c;
-    byBand.set(t.band, b);
+    const key = groups?.[i] ?? "all";
+    const g = byGroup.get(key) ?? { households: 0, cents: 0 };
+    g.households += t.households;
+    g.cents += c;
+    byGroup.set(key, g);
     min = Math.min(min, a.cents[i]!);
     max = Math.max(max, a.cents[i]! + (a.extraCent[i]! > 0 ? 1 : 0));
     perHousehold.push({ aid: a.cents[i]!, households: t.households });
@@ -206,8 +212,8 @@ export function summarize(tracts: AllocationInput[], a: Allocation): AllocationS
     medianAidUsd: median / 100,
     householdsAtMin: a.householdsAtMin,
     householdsAtMax: a.householdsAtMax,
-    byBand: [...byBand.entries()]
-      .sort(([x], [y]) => x - y)
-      .map(([band, v]) => ({ band, households: v.households, totalUsd: v.cents / 100, meanAidUsd: v.cents / v.households / 100 })),
+    byGroup: [...byGroup.entries()]
+      .sort((x, y) => y[1].households - x[1].households)
+      .map(([group, v]) => ({ group, households: v.households, totalUsd: v.cents / 100, meanAidUsd: v.cents / v.households / 100 })),
   };
 }

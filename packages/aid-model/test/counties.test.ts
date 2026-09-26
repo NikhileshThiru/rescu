@@ -1,16 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { autoDeclareCounties, type Band, type Impact } from "../src/index.js";
+import { autoDeclareCounties, countyNeed } from "../src/index.js";
 
-const imp = (maxKt: number): Impact => ({ maxKt, band: 0 as Band, peakT: null, t34: null, t50: null, t64: null });
+describe("auto-declaring counties", () => {
+  const tracts = [
+    { countyFips: "A", households: 1_000 },
+    { countyFips: "A", households: 1_000 },
+    { countyFips: "B", households: 10_000 },
+    { countyFips: "C", households: 500 },
+  ];
+  const need = [0.2, 0.0, 0.01, 0.06];
 
-describe("auto-declaring counties (custom storms)", () => {
-  it("declares counties with hurricane-force wind or a real share of households at 50 kt", () => {
-    const tracts = [
-      { countyFips: "A", households: 1_000 }, { countyFips: "A", households: 9_000 }, // 10% at 50 kt
-      { countyFips: "B", households: 100 }, { countyFips: "B", households: 50_000 }, // one tract at 64 kt
-      { countyFips: "C", households: 1_000 }, { countyFips: "C", households: 99_000 }, // 1% at 50 kt
-    ];
-    const set = autoDeclareCounties(tracts, [imp(55), imp(30), imp(70), imp(20), imp(52), imp(40)]);
-    expect([...set].sort()).toEqual(["A", "B"]);
+  it("declares counties where the expected share needing help clears the threshold", () => {
+    expect([...autoDeclareCounties(tracts, need, 0.05)].sort()).toEqual(["A", "C"]);
+    expect([...autoDeclareCounties(tracts, need, 0.08)].sort()).toEqual(["A"]);
+    expect([...autoDeclareCounties(tracts, need, 0.001)].sort()).toEqual(["A", "B", "C"]);
+  });
+
+  it("totals expected households in need per county", () => {
+    const c = countyNeed(tracts, need);
+    expect(c.get("A")).toEqual({ households: 2_000, expected: 200 });
+    expect(c.get("B")!.expected).toBeCloseTo(100, 9);
   });
 });
