@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { AppNav } from "@/components/ui/app-nav";
+import { Wordmark } from "@/components/ui/mark";
 import { cx } from "@/components/ui/primitives";
 import { simClock, simDay } from "@/lib/aid/format";
 import { AidProvider, useAid } from "./aid-context";
@@ -67,14 +68,7 @@ function Shell() {
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-bg">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_62%_45%,rgb(45_212_191/0.07),transparent_70%),radial-gradient(40%_40%_at_20%_80%,rgb(134_168_226/0.06),transparent_70%)]" />
       <header className="relative z-10 flex h-14 items-center justify-between px-6">
-        <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-text">
-          <span className="grid size-6 place-items-center rounded-md bg-teal-soft text-teal ring-1 ring-teal/25">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <path d="M12 4v10M7.5 10 12 14.5 16.5 10M6 19.5h12" />
-            </svg>
-          </span>
-          Rescu
-        </div>
+        <Wordmark compact />
         <AppNav />
         <div className="w-[88px]" />
       </header>

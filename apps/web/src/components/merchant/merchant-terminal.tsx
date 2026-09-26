@@ -195,7 +195,11 @@ export function MerchantTerminal() {
 
   return (
     <PageShell>
-      <PageBar live={live} title="Merchant terminal" />
+      <PageBar
+        live={live}
+        title="Merchant"
+        lead="A relief store's register. Ring up a charge or raise a price — the oracle checks every change against nearby stores' pre-storm prices."
+      />
       <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)_360px] gap-3 p-3">
         {/* Picker */}
         <Panel className="flex min-h-0 flex-col overflow-hidden">

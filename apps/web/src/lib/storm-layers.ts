@@ -9,9 +9,9 @@ const dash = new PathStyleExtension({ dash: true });
 const MAX_CLOUD_NM = 320;
 
 const RINGS = [
-  { kt: 34 as const, fill: [134, 168, 226, 16], line: [134, 168, 226, 110] },
-  { kt: 50 as const, fill: [170, 196, 240, 20], line: [170, 196, 240, 150] },
-  { kt: 64 as const, fill: [220, 232, 255, 26], line: [220, 232, 255, 210] },
+  { kt: 34 as const, fill: [90, 148, 232, 18], line: [90, 148, 232, 120] },
+  { kt: 50 as const, fill: [142, 192, 255, 22], line: [142, 192, 255, 160] },
+  { kt: 64 as const, fill: [238, 246, 255, 28], line: [238, 246, 255, 220] },
 ];
 
 export interface StormFrame {

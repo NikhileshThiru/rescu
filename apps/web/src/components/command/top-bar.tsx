@@ -6,22 +6,14 @@ import { formatClock, relative, usd } from "@/lib/format";
 import { type LiveClient, useLive } from "@/lib/live";
 import type { StormListing, Timeline } from "@/lib/storm-data";
 import { AppNav } from "../ui/app-nav";
+import { Wordmark } from "../ui/mark";
 import { NumberTicker } from "../ui/number-ticker";
 import { Badge, Button, cx, Dot, Kbd, Segmented } from "../ui/primitives";
 import { ShieldIcon } from "./breakit-drawer";
 import { ScanToJoin } from "./scan-to-join";
 
 export function Logo({ compact }: { compact?: boolean } = {}) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
-        <path d="M12 2.5 21 7.5v9L12 21.5 3 16.5v-9z" fill="none" stroke="#2dd4bf" strokeWidth="1.6" strokeLinejoin="round" />
-        <path d="M12 7v10M8 11.5l4 4 4-4" fill="none" stroke="#e6edf7" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <span className="text-[15px] font-semibold tracking-tight">Rescu</span>
-      {!compact && <span className="hidden text-sm text-text-3 lg:inline">Command Center</span>}
-    </div>
-  );
+  return <Wordmark subtitle="Command Center" compact={compact} />;
 }
 
 function PlayIcon({ playing }: { playing: boolean }) {

@@ -23,19 +23,19 @@ export const color = {
 
 /** Wind ramp by kt, validated as ordinal on the base colour. */
 export const WIND_STOPS: [kt: number, rgb: RGB][] = [
-  [25, hex("#34507f")],
-  [40, hex("#4f74b0")],
-  [64, hex("#86a8e2")],
-  [100, hex("#dce8ff")],
+  [25, hex("#2c4a8f")],
+  [40, hex("#4d7ad4")],
+  [64, hex("#8ec0ff")],
+  [100, hex("#eef6ff")],
 ];
 
 /** Aid ramp by dollars per eligible household. */
 export const AID_STOPS: [usd: number, rgb: RGB][] = [
-  [250, hex("#1b5c57")],
-  [600, hex("#1c8078")],
-  [1000, hex("#1fa596")],
-  [1500, hex("#46cdbb")],
-  [2000, hex("#a4f2e4")],
+  [250, hex("#0d6b64")],
+  [600, hex("#14998c")],
+  [1000, hex("#1fc4b0")],
+  [1500, hex("#5ee0cc")],
+  [2000, hex("#c5f8ef")],
 ];
 
 export function ramp(stops: [number, RGB][], x: number, out: RGB = [0, 0, 0]): RGB {

@@ -2,8 +2,8 @@ import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
 
-const LAND = "#111a2b";
-const WATER = "#070b15";
+const LAND = "#0e141f";
+const WATER = "#05080f";
 const HIDDEN = /^(aeroway|road_|highway_name|railway|building|landcover_wood|water_name|place_other|place_suburb|place_village)/;
 
 /**
@@ -16,11 +16,11 @@ const RELIEF: LayerSpecification = {
   type: "raster",
   source: "ne2_shaded",
   paint: {
-    "raster-saturation": -0.8,
-    "raster-brightness-min": 0.03,
-    "raster-brightness-max": 0.5,
-    "raster-contrast": 0.15,
-    "raster-opacity": 0.82,
+    "raster-saturation": -0.55,
+    "raster-brightness-min": 0.04,
+    "raster-brightness-max": 0.58,
+    "raster-contrast": 0.22,
+    "raster-opacity": 0.88,
   },
 };
 
@@ -47,7 +47,7 @@ function recolor(layer: LayerSpecification): LayerSpecification {
   else if (id === "waterway") {
     paint["line-color"] = WATER;
   } else if (id.startsWith("landcover") || id.startsWith("landuse")) {
-    paint["fill-color"] = "#0d1424";
+    paint["fill-color"] = "#121820";
     paint["fill-opacity"] = 0.5;
   } else if (id.startsWith("highway")) {
     paint["line-color"] = id.includes("casing") ? "rgba(0,0,0,0)" : "#18223a";

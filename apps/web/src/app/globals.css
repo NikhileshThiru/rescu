@@ -24,15 +24,15 @@
   --color-storm: #dce8ff;
   --color-storm-soft: rgb(220 232 255 / 0.1);
 
-  --color-wind-1: #34507f;
-  --color-wind-2: #4f74b0;
-  --color-wind-3: #86a8e2;
-  --color-wind-4: #dce8ff;
-  --color-aid-1: #1b5c57;
-  --color-aid-2: #1c8078;
-  --color-aid-3: #1fa596;
-  --color-aid-4: #46cdbb;
-  --color-aid-5: #a4f2e4;
+  --color-wind-1: #2c4a8f;
+  --color-wind-2: #4d7ad4;
+  --color-wind-3: #8ec0ff;
+  --color-wind-4: #eef6ff;
+  --color-aid-1: #0d6b64;
+  --color-aid-2: #14998c;
+  --color-aid-3: #1fc4b0;
+  --color-aid-4: #5ee0cc;
+  --color-aid-5: #c5f8ef;
 
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;

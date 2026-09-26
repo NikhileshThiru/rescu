@@ -176,7 +176,11 @@ export function OracleConsole() {
 
   return (
     <PageShell>
-      <PageBar live={live} title="Oracle" />
+      <PageBar
+        live={live}
+        title="Oracle"
+        lead="The watchdog. Every two seconds it compares store prices to the pre-storm neighborhood and looks for fraud — duplicate IDs, spending sprees, cash-back rings. Open a case, suspend the store on-chain, and the next payment is refused by the transfer hook."
+      />
       <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(0,1fr)_300px] gap-3 p-3">
         {/* Cases */}
         <Panel className="flex min-h-0 flex-col overflow-hidden">

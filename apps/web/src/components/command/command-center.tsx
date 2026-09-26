@@ -49,7 +49,7 @@ export function CommandCenter() {
   const [file, setFile] = useState<StormFile | null>(null);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [mode, setMode] = useState<LayerMode>("wind");
-  const [res, setRes] = useState(5);
+  /** H3 res 5 (~16 km). Locked: one size, the smaller one. */
   const [hover] = useState(createHoverStore);
   const [mapReady, setMapReady] = useState(false);
   const [cameraAuto, setCameraAuto] = useState(true);
@@ -125,7 +125,7 @@ export function CommandCenter() {
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return;
-    (window as unknown as { __rescu: unknown }).__rescu = { clock, live, effects, setMode, setRes, setSlug };
+    (window as unknown as { __rescu: unknown }).__rescu = { clock, live, effects, setMode, setSlug };
   }, [clock, live, effects]);
 
   useEffect(() => {
@@ -160,7 +160,7 @@ export function CommandCenter() {
       <MapView
         ref={map}
         file={file}
-        res={res}
+        res={5}
         mode={mode}
         clock={clock}
         effects={effects}
@@ -200,8 +200,6 @@ export function CommandCenter() {
               onStorm={setSlug}
               mode={mode}
               onMode={setMode}
-              res={res}
-              onRes={setRes}
               cameraAuto={cameraAuto}
               onFollow={() => map.current?.follow()}
             />

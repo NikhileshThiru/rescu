@@ -3,6 +3,7 @@
 import type { Eligibility, Persona, RunInfo, Session } from "@rescu/live";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { Mark } from "@/components/ui/mark";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import { cx } from "@/components/ui/primitives";
 import { setAllowance } from "@/lib/aid/actions";
@@ -56,11 +57,7 @@ function Welcome({ run, onPersonas, onHere }: { run: RunInfo | null; onPersonas:
   return (
     <div className="flex min-h-full flex-col px-5 pb-8 pt-6">
       <div className="flex items-center gap-2.5">
-        <span className="grid size-9 place-items-center rounded-xl bg-teal-soft text-teal ring-1 ring-teal/25">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-            <path d="M12 4v10M7.5 10 12 14.5 16.5 10M6 19.5h12" />
-          </svg>
-        </span>
+        <Mark size={22} />
         <div>
           <div className="text-[17px] font-semibold tracking-tight">Rescu</div>
           <div className="text-2xs text-text-3">Aid airdropped in seconds</div>

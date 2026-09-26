@@ -15,8 +15,6 @@ export function MapControls({
   onStorm,
   mode,
   onMode,
-  res,
-  onRes,
   cameraAuto,
   onFollow,
 }: {
@@ -26,8 +24,6 @@ export function MapControls({
   onStorm?: (slug: string) => void;
   mode: LayerMode;
   onMode: (m: LayerMode) => void;
-  res: number;
-  onRes: (r: number) => void;
   /** False once the presenter has moved the map; shows "Follow storm". */
   cameraAuto: boolean;
   onFollow: () => void;
@@ -84,9 +80,9 @@ export function MapControls({
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-2xs leading-relaxed text-text-3">
                   <svg width="18" height="18" viewBox="0 0 18 18" className="shrink-0" aria-hidden>
-                    <ellipse cx="9" cy="9" rx="8.2" ry="7.4" fill="none" stroke="rgb(134,168,226)" strokeWidth="1" />
-                    <ellipse cx="8.4" cy="9" rx="5.4" ry="4.9" fill="none" stroke="rgb(170,196,240)" strokeWidth="1" />
-                    <ellipse cx="8" cy="9" rx="2.8" ry="2.5" fill="none" stroke="rgb(220,232,255)" strokeWidth="1" />
+                    <ellipse cx="9" cy="9" rx="8.2" ry="7.4" fill="none" stroke="rgb(90,148,232)" strokeWidth="1" />
+                    <ellipse cx="8.4" cy="9" rx="5.4" ry="4.9" fill="none" stroke="rgb(142,192,255)" strokeWidth="1" />
+                    <ellipse cx="8" cy="9" rx="2.8" ry="2.5" fill="none" stroke="rgb(238,246,255)" strokeWidth="1" />
                   </svg>
                   <span>Rings: how far 39, 58 and 74 mph winds reach right now.</span>
                 </div>
@@ -105,18 +101,6 @@ export function MapControls({
             )}
           </motion.div>
         </AnimatePresence>
-        <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
-          <span className="text-xs text-text-3">Hex size</span>
-          <Segmented
-            size="sm"
-            value={res}
-            onChange={onRes}
-            options={[
-              { value: 5, label: "16 km" },
-              { value: 4, label: "42 km" },
-            ]}
-          />
-        </div>
         <AnimatePresence initial={false}>
           {!cameraAuto && (
             <motion.div
