@@ -120,7 +120,19 @@ export interface OracleCase {
   summary: { status: "pending" | "ready" | "fallback" | "error"; text: string | null; model: string | null };
   /** What the oracle suggests doing. */
   recommended: OracleActionKind[];
+  /**
+   * About the live demo's own actors: a price someone set at the merchant terminal, or a resident
+   * using the app (persona, phone, MCP). Screens list these open cases first and select them.
+   */
+  fromApp: boolean;
   actions: OracleActionRecord[];
+}
+
+/** Open cases about the demo's own actors first, then newest first (the order every case list uses). */
+export function caseOrder(a: OracleCase, b: OracleCase): number {
+  const pa = a.fromApp && a.status === "open" ? 1 : 0;
+  const pb = b.fromApp && b.status === "open" ? 1 : 0;
+  return pb - pa || b.openedAt - a.openedAt;
 }
 
 export type PlantedKind = "gouging" | "duplicate_identity" | "velocity" | "collusion";

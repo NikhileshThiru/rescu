@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  caseOrder,
   type ClientMsg,
   type ClockState,
   clockAt,
@@ -33,7 +34,7 @@ export interface LiveState {
   history: boolean;
   /** Last error the server sent back (e.g. "A relief network is live for ..."). */
   error: string | null;
-  /** The oracle's cases for this run, newest first. */
+  /** The oracle's cases for this run: open cases about the demo's own actors first, then newest first. */
   cases: OracleCase[];
   /** Stores whose status/flag isn't the default, by store index (suspended = red dot, flagged = amber). */
   stores: Record<number, StoreState>;
@@ -296,12 +297,12 @@ export class LiveClient {
         for (const fn of this.batchListeners) fn(msg.batch, msg.runId);
         return;
       case "cases":
-        if (msg.runId === this.state.run?.id) this.set({ cases: [...msg.cases].sort((a, b) => b.openedAt - a.openedAt) });
+        if (msg.runId === this.state.run?.id) this.set({ cases: [...msg.cases].sort(caseOrder) });
         return;
       case "case": {
         if (msg.runId !== this.state.run?.id) return;
         const rest = this.state.cases.filter((c) => c.id !== msg.case.id);
-        this.set({ cases: [msg.case, ...rest].sort((a, b) => b.openedAt - a.openedAt) });
+        this.set({ cases: [msg.case, ...rest].sort(caseOrder) });
         return;
       }
       case "stores":

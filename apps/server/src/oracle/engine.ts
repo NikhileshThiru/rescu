@@ -1,4 +1,4 @@
-import type { ActionInput, CaseKind, Evidence, Feature, OracleActionKind, OracleActionRecord, OracleCase, OracleMetrics, PlantedKind, SubjectRef } from "@rescu/live";
+import { type ActionInput, type CaseKind, caseOrder, type Evidence, type Feature, type OracleActionKind, type OracleActionRecord, type OracleCase, type OracleMetrics, type PlantedKind, type SubjectRef } from "@rescu/live";
 import {
   combineScore,
   detectCollusion,
@@ -499,6 +499,7 @@ export class OracleEngine {
     const anomaly = x.anomaly === null ? null : round(x.anomaly, 3);
     const score = combineScore(x.rule, anomaly);
     const prev = st.cases.get(x.id);
+    const fromApp = x.subjects.some((s) => (s.kind === "merchant" ? st.manualStores.has(s.idx) : run.people.isApp(s.idx)));
     const now = Date.now();
     if (!prev) {
       if (score < this.scoreToOpen) return;
@@ -519,6 +520,7 @@ export class OracleEngine {
         anomaly,
         summary: { status: "pending", text: null, model: null },
         recommended: x.recommended,
+        fromApp,
         actions: [],
       };
       st.cases.set(c.id, c);
@@ -528,7 +530,9 @@ export class OracleEngine {
       return;
     }
     const material =
+      prev.fromApp !== fromApp ||
       prev.title !== x.title || Math.abs(prev.score - score) >= 0.01 || prev.subjects.length !== x.subjects.length || JSON.stringify(evidenceKey(prev.evidence)) !== JSON.stringify(evidenceKey(x.evidence));
+    prev.fromApp = fromApp;
     prev.score = score;
     prev.severity = severityOf(score);
     prev.title = x.title;
@@ -580,7 +584,7 @@ export class OracleEngine {
     const st = this.current();
     if (!st) return [];
     const out = [...st.cases.values()].filter((c) => !status || c.status === status);
-    return out.sort((a, b) => b.openedAt - a.openedAt);
+    return out.sort(caseOrder);
   }
 
   get(id: string): OracleCase {

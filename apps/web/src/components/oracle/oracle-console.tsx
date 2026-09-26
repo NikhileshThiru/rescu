@@ -117,7 +117,27 @@ export function OracleConsole() {
     if (kind && c.kind !== kind) setKind(null);
   }, [cases, filter, kind]);
 
-  // Nothing (or a vanished case) selected: take the newest in view.
+  // A case about the demo's own actors that just opened (a price hike at the terminal, an app
+  // resident) takes the selection, so the presenter lands on it even with this page already open.
+  const seenApp = useRef<Set<string> | null>(null);
+  const openedWithLink = useRef(selected !== null);
+  useEffect(() => {
+    const open = cases.filter((c) => c.fromApp && c.status === "open");
+    if (seenApp.current === null) {
+      // First cases in: with a deep link, they're all "already seen" (the link wins).
+      if (!cases.length) return;
+      seenApp.current = new Set(openedWithLink.current ? open.map((c) => c.id) : []);
+    }
+    const fresh = open.find((c) => !seenApp.current!.has(c.id));
+    for (const c of open) seenApp.current.add(c.id);
+    if (!fresh) return;
+    deepLinked.current = null;
+    setFilter((f) => (f === "actioned" ? "open" : f));
+    setKind((k) => (k && k !== fresh.kind ? null : k));
+    setSelected(fresh.id);
+  }, [cases]);
+
+  // Nothing (or a vanished case) selected: take the first in view (the demo's own cases lead).
   const current = cases.find((c) => c.id === selected) ?? null;
   useEffect(() => {
     if (current || deepLinked.current) return;

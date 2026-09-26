@@ -108,6 +108,11 @@ export class Residents {
     return idx === undefined ? undefined : this.byIdx.get(idx);
   }
 
+  /** A resident a person, agent or MCP client has driven this run (not just a sim household). */
+  isApp(idx: number): boolean {
+    return this.byIdx.has(idx);
+  }
+
   /** Every resident a person, agent or MCP client has driven this run. */
   all(): AppResident[] {
     return [...this.byIdx.values()];
