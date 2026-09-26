@@ -15,7 +15,14 @@
     "data:report": "pnpm --filter @rescu/data report",
     "db:migrate": "pnpm --filter @rescu/data migrate",
     "data:load": "pnpm --filter @rescu/data load",
-    "test:model": "pnpm --filter @rescu/aid-model test"
+    "test:model": "pnpm --filter @rescu/aid-model test",
+    "server:dev": "pnpm --filter @rescu/server dev",
+    "server:start": "pnpm --filter @rescu/server start",
+    "sim": "pnpm --filter @rescu/server sim",
+    "test:server": "pnpm --filter @rescu/server test",
+    "web:dev": "pnpm --filter @rescu/web dev",
+    "web:build": "pnpm --filter @rescu/web build",
+    "web:data": "pnpm --filter @rescu/data export-web"
   },
   "devDependencies": {
     "@types/node": "22.20.4",

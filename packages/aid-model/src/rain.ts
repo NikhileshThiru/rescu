@@ -1,6 +1,6 @@
-import { NM_PER_DEGREE_LAT } from "./geo.js";
-import type { StormState } from "./types.js";
-import { distanceNm } from "./geo.js";
+import { NM_PER_DEGREE_LAT } from "./geo";
+import type { StormState } from "./types";
+import { distanceNm } from "./geo";
 
 const KM_PER_NM = 1.852;
 const MM_PER_INCH = 25.4;

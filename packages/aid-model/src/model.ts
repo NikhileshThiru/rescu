@@ -1,5 +1,5 @@
-import type { HazardInput, NeedParams } from "./need.js";
-import { needProbability } from "./need.js";
+import type { HazardInput, NeedParams } from "./need";
+import { needProbability } from "./need";
 import fitted from "./need-model.json" with { type: "json" };
 
 /** The need model tuned on FEMA outcomes by data/pipeline/fit.ts (regenerate with `pnpm data:fit`). */

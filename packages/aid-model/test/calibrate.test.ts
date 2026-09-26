@@ -7,8 +7,8 @@ import {
   spearman,
   type TrainingCounty,
   type TrainingTract,
-} from "../src/index.js";
-import { rng } from "./helpers.js";
+} from "../src/index";
+import { rng } from "./helpers";
 
 /**
  * Plants a known "true" need model, generates what FEMA would have approved under it, and checks

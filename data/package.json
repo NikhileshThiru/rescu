@@ -14,7 +14,8 @@
     "features": "tsx pipeline/features.ts",
     "fit": "tsx pipeline/fit.ts",
     "surge-check": "tsx pipeline/surge-check.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "export-web": "tsx pipeline/export-web.ts"
   },
   "dependencies": {
     "@rescu/aid-model": "workspace:*",

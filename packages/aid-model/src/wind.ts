@@ -1,5 +1,5 @@
-import { bearingDeg, destination, distanceNm, NM_PER_DEGREE_LAT } from "./geo.js";
-import { type Band, bandOf, type Impact, type Radii, type StormState } from "./types.js";
+import { bearingDeg, destination, distanceNm, NM_PER_DEGREE_LAT } from "./geo";
+import { type Band, bandOf, type Impact, type Radii, type StormState } from "./types";
 
 /** Outside the outermost reported radius wind falls off as (r/d)^DECAY (modified Rankine). */
 const DECAY = 0.6;

@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-bg: #070b14;
+  --color-surface-1: #0c1220;
+  --color-surface-2: #111a2c;
+  --color-surface-3: #18233a;
+  --color-line: rgb(154 168 189 / 0.12);
+  --color-line-strong: rgb(154 168 189 / 0.22);
+
+  --color-text: #e6edf7;
+  --color-text-2: #9aa8bd;
+  --color-text-3: #7c8aa0;
+
+  --color-teal: #2dd4bf;
+  --color-teal-soft: rgb(45 212 191 / 0.14);
+  --color-amber: #f5b83d;
+  --color-amber-soft: rgb(245 184 61 / 0.14);
+  --color-red: #f0616d;
+  --color-red-soft: rgb(240 97 109 / 0.14);
+  --color-storm: #dce8ff;
+  --color-storm-soft: rgb(220 232 255 / 0.1);
+
+  --color-wind-1: #34507f;
+  --color-wind-2: #4f74b0;
+  --color-wind-3: #86a8e2;
+  --color-wind-4: #dce8ff;
+  --color-aid-1: #1b5c57;
+  --color-aid-2: #1c8078;
+  --color-aid-3: #1fa596;
+  --color-aid-4: #46cdbb;
+  --color-aid-5: #a4f2e4;
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  --radius-panel: 14px;
+  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 12px 32px -12px rgb(0 0 0 / 0.6);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+
+  ::selection {
+    background: rgb(45 212 191 / 0.3);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(45 212 191 / 0.6);
+    outline-offset: 2px;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* 0.92: opaque enough that bright map labels never read through a panel. */
+@utility glass {
+  background: rgb(12 18 32 / 0.92);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+@utility eyebrow {
+  font-size: var(--text-2xs);
+  line-height: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--color-text-3);
+}
+
+.maplibregl-ctrl-attrib {
+  background: transparent !important;
+  font-size: 10px;
+  color: var(--color-text-3);
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--color-text-3) !important;
+}
+.maplibregl-ctrl-attrib-button {
+  filter: invert(0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

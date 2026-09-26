@@ -9,8 +9,8 @@ import {
   specNeed,
   summarize,
   tractTotalCents,
-} from "../src/index.js";
-import { rng } from "./helpers.js";
+} from "../src/index";
+import { rng } from "./helpers";
 
 /** Tracts with a skewed need distribution: most barely touched, a few devastated. */
 function synthetic(n: number, seed: number, severity = 1): AllocationInput[] {

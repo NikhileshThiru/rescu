@@ -1,4 +1,4 @@
-import type { Band } from "./types.js";
+import type { Band } from "./types";
 
 export interface AllocationParams {
   /** Average aid per eligible household, dollars. The pot is eligible households x this. */

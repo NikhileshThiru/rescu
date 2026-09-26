@@ -1,7 +1,7 @@
 import { cellToLatLng, latLngToCell, polygonToCells } from "h3-js";
-import { type Allocation, tractTotalCents } from "./allocate.js";
-import { type Band, bandOf, type Impact, type StormState } from "./types.js";
-import { impactsAt, MIN_TRACKED_KT, reachNm } from "./wind.js";
+import { type Allocation, tractTotalCents } from "./allocate";
+import { type Band, bandOf, type Impact, type StormState } from "./types";
+import { impactsAt, MIN_TRACKED_KT, reachNm } from "./wind";
 
 export interface TractPoint {
   lat: number;

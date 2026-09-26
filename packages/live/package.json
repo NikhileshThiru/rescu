@@ -1,0 +1,17 @@
+{
+  "name": "@rescu/live",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Wire protocol between the sim server and the web app: clock, run state, KPIs, live event batches.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "typescript": "6.0.3"
+  }
+}

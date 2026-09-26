@@ -11,7 +11,7 @@ import {
   type Keypair,
   PublicKey,
   type Transaction,
-  type TransactionInstruction,
+  TransactionInstruction,
   type VersionedTransaction,
 } from "@solana/web3.js";
 import { DECIMALS, DEFAULT_RULES, MERCHANT_CATEGORY, type MerchantCategory, usd } from "./constants.js";
@@ -70,6 +70,7 @@ const readOnlyWallet = (publicKey: PublicKey) => ({
  */
 export class RescuClient {
   readonly program: Program<Rescu>;
+  private readonly enrollTemplates = new Map<string, { ix: TransactionInstruction; owner: PublicKey; tokenAccount: PublicKey; wallet: PublicKey }>();
 
   constructor(
     readonly connection: Connection,
@@ -87,7 +88,7 @@ export class RescuClient {
 
   // ---------- declaration ----------
 
-  async createDeclaration(admin: Keypair, input: DeclarationInput) {
+  async createDeclaration(admin: Keypair, input: DeclarationInput, opts?: SendOptions) {
     const addrs = declarationAddresses(input.id);
     const ix = await this.program.methods
       .initDeclaration({
@@ -110,20 +111,23 @@ export class RescuClient {
         tokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .instruction();
-    const signature = await this.send([ix], [admin]);
+    const signature = await this.send([ix], [admin], opts);
     return { signature, ...addrs };
   }
 
-  async setClock(admin: Keypair, mint: PublicKey, timeScale: number, simNow: number, opts?: SendOptions) {
-    const ix = await this.program.methods
+  setClockInstruction(admin: PublicKey, mint: PublicKey, timeScale: number, simNow: number) {
+    return this.program.methods
       .setClock(timeScale, bn(simNow))
-      .accountsPartial({ admin: admin.publicKey, declaration: declarationPda(mint) })
+      .accountsPartial({ admin, declaration: declarationPda(mint) })
       .instruction();
-    return this.send([ix], [admin], opts);
   }
 
-  async updateRules(admin: Keypair, mint: PublicKey, rules: RulesInput) {
-    const ix = await this.program.methods
+  async setClock(admin: Keypair, mint: PublicKey, timeScale: number, simNow: number, opts?: SendOptions) {
+    return this.send([await this.setClockInstruction(admin.publicKey, mint, timeScale, simNow)], [admin], opts);
+  }
+
+  updateRulesInstruction(admin: PublicKey, mint: PublicKey, rules: RulesInput) {
+    return this.program.methods
       .updateRules({
         perOrderCap: opt(rules.perOrderCap, bn),
         dailyCap: opt(rules.dailyCap, bn),
@@ -132,15 +136,19 @@ export class RescuClient {
         oracle: rules.oracle ?? null,
         budget: opt(rules.budget, bn),
       })
-      .accountsPartial({ admin: admin.publicKey, declaration: declarationPda(mint) })
+      .accountsPartial({ admin, declaration: declarationPda(mint) })
       .instruction();
-    return this.send([ix], [admin]);
+  }
+
+  async updateRules(admin: Keypair, mint: PublicKey, rules: RulesInput) {
+    return this.send([await this.updateRulesInstruction(admin.publicKey, mint, rules)], [admin]);
   }
 
   // ---------- merchants ----------
 
-  async registerMerchant(
-    admin: Keypair,
+  /** Create-ATA + register for one merchant; several fit in one transaction. */
+  async registerMerchantInstructions(
+    admin: PublicKey,
     mint: PublicKey,
     owner: PublicKey,
     opts: { category?: MerchantCategory; h3Cell?: bigint; approved?: boolean } = {},
@@ -156,13 +164,22 @@ export class RescuClient {
       .registerMerchant(MERCHANT_CATEGORY[opts.category ?? "general"], bn(opts.h3Cell ?? 0n), opts.approved ?? true)
       .accountsPartial({
         payer: this.relayer.publicKey,
-        admin: admin.publicKey,
+        admin,
         declaration: declarationPda(mint),
         owner,
         merchant: merchantPda(owner),
       })
       .instruction();
-    return this.send([createAta, register], [admin]);
+    return [createAta, register];
+  }
+
+  async registerMerchant(
+    admin: Keypair,
+    mint: PublicKey,
+    owner: PublicKey,
+    opts: { category?: MerchantCategory; h3Cell?: bigint; approved?: boolean } = {},
+  ) {
+    return this.send(await this.registerMerchantInstructions(admin.publicKey, mint, owner, opts), [admin]);
   }
 
   async setMerchantStatus(signer: Keypair, mint: PublicKey, owner: PublicKey, status: MerchantStatusName) {
@@ -177,31 +194,66 @@ export class RescuClient {
     return this.send([ix], [signer]);
   }
 
+  /** A relief-dollar account for any owner (e.g. a store that never registered). */
+  createAtaInstruction(owner: PublicKey, mint: PublicKey) {
+    return createAssociatedTokenAccountIdempotentInstruction(
+      this.relayer.publicKey,
+      reliefAta(owner, mint),
+      owner,
+      mint,
+      TOKEN_2022_PROGRAM_ID,
+    );
+  }
+
   // ---------- residents ----------
 
-  /** Create-ATA + enroll for one resident; several fit in one transaction. */
-  async enrollInstructions(admin: PublicKey, mint: PublicKey, owner: PublicKey, householdId: bigint) {
+  /**
+   * Create-ATA + enroll for one resident; several fit in one transaction. `payer` covers the rent
+   * (default: the relayer); spreading it over several payers lets the validator run enrollments in parallel.
+   */
+  async enrollInstructions(admin: PublicKey, mint: PublicKey, owner: PublicKey, householdId: bigint, payer: PublicKey = this.relayer.publicKey) {
     const tokenAccount = reliefAta(owner, mint);
+    const wallet = walletPda(tokenAccount);
     const createAta = createAssociatedTokenAccountIdempotentInstruction(
-      this.relayer.publicKey,
+      payer,
       tokenAccount,
       owner,
       mint,
       TOKEN_2022_PROGRAM_ID,
     );
-    const enroll = await this.program.methods
-      .enrollResident(bn(householdId))
-      .accountsPartial({
-        payer: this.relayer.publicKey,
-        admin,
-        declaration: declarationPda(mint),
-        mint,
-        owner,
-        tokenAccount,
-        wallet: walletPda(tokenAccount),
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-      })
-      .instruction();
+    // Anchor's builder costs ~2.5 ms per call, so build it once per (admin, mint, payer) and
+    // swap in each resident's accounts and id (20k registrations would otherwise be CPU-bound).
+    const key = `${admin.toBase58()}:${mint.toBase58()}:${payer.toBase58()}`;
+    let tpl = this.enrollTemplates.get(key);
+    if (!tpl) {
+      const ix = await this.program.methods
+        .enrollResident(bn(householdId))
+        .accountsPartial({
+          payer,
+          admin,
+          declaration: declarationPda(mint),
+          mint,
+          owner,
+          tokenAccount,
+          wallet,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+        })
+        .instruction();
+      tpl = { ix, owner, tokenAccount, wallet };
+      this.enrollTemplates.set(key, tpl);
+    }
+    const swap = new Map([
+      [tpl.owner.toBase58(), owner],
+      [tpl.tokenAccount.toBase58(), tokenAccount],
+      [tpl.wallet.toBase58(), wallet],
+    ]);
+    const data = Buffer.from(tpl.ix.data);
+    data.writeBigUInt64LE(householdId, 8);
+    const enroll = new TransactionInstruction({
+      programId: tpl.ix.programId,
+      keys: tpl.ix.keys.map((k) => ({ ...k, pubkey: swap.get(k.pubkey.toBase58()) ?? k.pubkey })),
+      data,
+    });
     return [createAta, enroll];
   }
 

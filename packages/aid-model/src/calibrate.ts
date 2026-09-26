@@ -1,4 +1,4 @@
-import { type NeedParams, RAIN_KNOTS, soaked, WIND_KNOTS } from "./need.js";
+import { type NeedParams, RAIN_KNOTS, soaked, WIND_KNOTS } from "./need";
 
 /**
  * Fits the need model to real outcomes: for each county, expected FEMA approvals

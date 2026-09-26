@@ -1,5 +1,5 @@
-import { KM_PER_NM } from "./geo.js";
-import type { Quadrants, Radii, Storm, StormPoint, StormState } from "./types.js";
+import { KM_PER_NM } from "./geo";
+import type { Quadrants, Radii, Storm, StormPoint, StormState } from "./types";
 
 const KT_TO_MS = 0.514444;
 

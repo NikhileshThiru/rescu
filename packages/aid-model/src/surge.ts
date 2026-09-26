@@ -1,6 +1,6 @@
-import { bearingDeg, distanceNm, NM_PER_DEGREE_LAT } from "./geo.js";
-import type { StormState } from "./types.js";
-import { reachNm, windAtPolar } from "./wind.js";
+import { bearingDeg, distanceNm, NM_PER_DEGREE_LAT } from "./geo";
+import type { StormState } from "./types";
+import { reachNm, windAtPolar } from "./wind";
 
 /** Surge only reaches low land near the coast; exposure halves roughly every 7 km inland. */
 export const SURGE_DECAY_KM = 10;
