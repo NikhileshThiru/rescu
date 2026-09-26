@@ -42,8 +42,9 @@ export function residentOf(s: Services, req: FastifyRequest): { run: Run; reside
   return { run, resident };
 }
 
-/** Turns ApiFail and zod errors into `{ error, code }`. Registered once in index.ts. */
+/** Turns ApiFail and zod errors into `{ error, code }`, unknown routes too. Registered once in index.ts. */
 export function installErrorHandler(app: FastifyInstance) {
+  app.setNotFoundHandler((req: FastifyRequest, reply: FastifyReply) => reply.status(404).send({ error: `No route ${req.method} ${req.url.split("?")[0]}`, code: "not_found" }));
   app.setErrorHandler((err: unknown, _req: FastifyRequest, reply: FastifyReply) => {
     if (err instanceof ApiFail) return reply.status(err.status).send(err.body());
     if (err instanceof ZodError) {

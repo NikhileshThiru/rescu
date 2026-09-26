@@ -484,7 +484,7 @@ function FeedRow({ item: f, index, run }: { item: FeedItem; index: number; run: 
                 <span className={cx("shrink-0 rounded border px-1 text-[10px] font-medium leading-[14px]", badge.cls)}>{badge.label}</span>
               )}
             </span>
-            {f.kind !== "oracle" && (
+            {f.kind !== "oracle" && !(f.origin === "breakit" && f.usd === 0) && (
               <span className={`shrink-0 tabular ${f.kind === "blocked" ? "text-red line-through decoration-red/50" : f.kind === "join" ? "text-teal" : "text-text-2"}`}>
                 {f.kind === "join" ? "+" : ""}
                 {f.usd >= 1e4 ? usdCompact(f.usd) : `$${f.usd.toFixed(2)}`}

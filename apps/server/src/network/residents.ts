@@ -30,6 +30,8 @@ const JOIN_RADIUS_KM = 6;
 const RELAY_TTL_MS = 60_000;
 const ACCOUNT_CACHE_MS = 800;
 export const PERSONAS = 6;
+/** Phone registrations per run (each is an on-chain enrollment + aid; the public demo can't be flooded). */
+const MAX_JOINS = 400;
 /** A persona's open store must be this close (road trips after a storm are short). */
 const PERSONA_SHOP_KM = 25;
 
@@ -234,6 +236,7 @@ export class Residents {
   async join(input: JoinInput): Promise<Session> {
     const run = this.run;
     if (run.phase !== "ready" && run.phase !== "live") throw new ApiFail(409, "no_run", `The relief network is ${run.phase}; registration opens once it's staged`);
+    if (this.joined.length >= MAX_JOINS) throw new ApiFail(429, "registration_full", "This demo run has all the phone registrations it can take. Pick a resident instead.");
     const el = this.eligibility(input.lat, input.lon);
     if (!el.eligible) throw new ApiFail(422, "not_eligible", el.reason ?? "Not eligible");
     const idx = run.world.households.n + this.joined.length;
