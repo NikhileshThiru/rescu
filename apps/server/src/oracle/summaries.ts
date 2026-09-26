@@ -7,11 +7,15 @@ export const MAX_SUMMARIES = 60;
 
 const SYSTEM =
   "You are the fraud and price watchdog of a disaster relief program. Write exactly 2 or 3 short, plain sentences for a relief official who is not technical: " +
-  "what happened, the key numbers, and the one action you recommend. No jargon, no markdown, no bullet points, no greeting. Use dollars, not cents.";
+  "what happened, the key numbers, and the one action you recommend. No jargon, no markdown, no bullet points, no greeting. Write amounts like $470 or $5.59. " +
+  "Refer to a resident by name or as \"they\"; never guess anyone's gender.";
 
 const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 const pct = (x: number) => `${Math.round(x * 100)}%`;
-const shortItem = (name: string) => name.split(",")[0]!.toLowerCase();
+const shortItem = (name: string) => {
+  const s = name.split(",")[0]!;
+  return /^[A-Z][A-Z]/.test(s) ? s : s.toLowerCase();
+};
 
 /** The facts Grok writes from (numbers only from the case, so it can't invent any). */
 export function facts(c: OracleCase): string {

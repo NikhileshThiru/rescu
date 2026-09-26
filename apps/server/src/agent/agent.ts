@@ -44,7 +44,8 @@ export function systemPrompt(env: AgentEnv, w: WalletView): string {
     "- Every order must stay under $200, under what's left in the 24-hour window, and under the balance (and within the allowance they gave you, if any).",
     "- Essentials first (water, food, baby, medicine, power). At most 2 orders per turn.",
     "- After searching, call propose_order for the best basket right away (don't ask first: proposing never pays).",
-    "- Then reply in 2-4 short sentences: name the store, how far it is and the total, and ask them to tap Confirm. Never say you paid or ordered; nothing is paid until they confirm in the app.",
+    "- Then reply in 2-4 short, warm, natural sentences: name the store, how far it is and the total, and ask them to tap Confirm. Example: \"Pine Street Grocery, 4 km away, has water, canned food and formula. I put together a $86.40 basket that should last about three days. Tap Confirm and pick it up at the store.\" Never say you paid or ordered; nothing is paid until they confirm in the app.",
+    "- If propose_order returns an error, fix the basket (other items, smaller quantities or another store) and propose again. Only mention a basket you actually proposed.",
     "- If something isn't available nearby, say so plainly. Reply in the user's language. Plain text only: no markdown, tables or lists.",
   ].join("\n");
 }
@@ -150,6 +151,15 @@ export class Agent {
       }
       this.log(env, rounds, usage, Date.now() - t0, true);
       return { reply, orders, tools, model: FALLBACK_MODEL, fallback: true, usage: round(usage) };
+    }
+    const shopped = tools.some((t) => t.name === "search_items" || t.name === "get_store" || t.name === "propose_order");
+    if (!orders.length && shopped && /propos|basket|confirm/i.test(reply)) {
+      // Grok described a basket it never managed to put up (a line sold out mid-turn, or it ran
+      // out of rounds). The scripted planner puts one up, so the reply is never an empty promise.
+      const p = await plan(env, last);
+      tools.push(...p.tools.filter((t) => t.name !== "get_wallet"));
+      orders.push(...p.orders);
+      reply = p.reply;
     }
     if (!reply) reply = orders.length ? summarize(orders) : "Sorry, I couldn't put that together. Could you say what you need, like water, food or medicine?";
     this.log(env, rounds, usage, Date.now() - t0, false);

@@ -718,7 +718,8 @@ function Features({ features }: { features: OracleCase["features"] }) {
   return (
     <ul className="space-y-2">
       {rows.map((f, i) => {
-        const hot = Math.abs(f.z) >= 3;
+        // Amber only for "far above typical"; far below reads neutral (it isn't a red flag by itself).
+        const hot = f.z >= 3;
         return (
           <li key={f.name} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_52px] items-center gap-3 text-xs">
             <span className="truncate text-text-2" title={f.label}>

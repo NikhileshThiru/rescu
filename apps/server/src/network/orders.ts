@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { DEFAULT_RULES, REJECTION_COPY } from "@rescu/chain";
 import type { ConfirmResult, Order, OrderLine, OrderOrigin, PayerKind } from "@rescu/live";
+import { ALL_ITEMS } from "../catalog.js";
 import type { Run } from "../run.js";
 import { countyLabel } from "../world.js";
 import { ApiFail } from "./errors.js";
@@ -52,6 +53,9 @@ export class Orders {
     // Merge repeated items, then price them at this store now.
     const qty = new Map<number, number>();
     for (const l of input.lines) qty.set(l.itemId, (qty.get(l.itemId) ?? 0) + l.qty);
+    // An agent's basket is fitted to the shelf as it is now: other shoppers keep buying while
+    // Grok thinks, so a line that sold out is dropped and a short one is cut, with a note.
+    const fitted = input.origin === "agent" || input.origin === "mcp" ? this.fitToShelf(m, qty, t) : null;
     let lines: OrderLine[];
     try {
       lines = run.market.priceLines(m, [...qty].map(([itemId, q]) => ({ itemId, qty: q })), t);
@@ -83,12 +87,34 @@ export class Orders {
       note: input.note ?? null,
       signature: null,
       rule: null,
-      message: run.market.status[m] === "approved" ? null : `${M.name[m]} is ${run.market.status[m]}; the chain will refuse this payment.`,
+      message: run.market.status[m] === "approved" ? (fitted?.note ?? null) : `${M.name[m]} is ${run.market.status[m]}; the chain will refuse this payment.`,
       latencyMs: null,
       paidAt: null,
     };
     this.store(o);
     return o;
+  }
+
+  /** Cuts each line to the store's stock (and the item's max); drops what sold out. Mutates `qty`. */
+  private fitToShelf(m: number, qty: Map<number, number>, t: number): { note: string | null } {
+    const market = this.run.market;
+    const gone: string[] = [];
+    const cut: string[] = [];
+    for (const [itemId, want] of [...qty]) {
+      const item = ALL_ITEMS[itemId];
+      if (!item || !market.carries(m, itemId)) continue; // priceLines explains it
+      const have = Math.min(market.stock(m, itemId, t), item.maxQty);
+      if (have <= 0) {
+        qty.delete(itemId);
+        gone.push(item.name.split(",")[0]!);
+      } else if (have < want) {
+        qty.set(itemId, have);
+        cut.push(`${have} of ${want} ${item.name.split(",")[0]!.toLowerCase()}`);
+      }
+    }
+    if (!qty.size) throw new ApiFail(409, "out_of_stock", `Everything in that basket just sold out at ${this.run.world.merchants.name[m]}. Search again for another store.`);
+    const parts = [gone.length ? `Sold out: ${gone.join(", ")}` : null, cut.length ? `only ${cut.join(", ")} left` : null].filter(Boolean);
+    return { note: parts.length ? `${parts.join("; ")}.` : null };
   }
 
   /** Window and balance checks, so Grok's baskets fit before they reach the chain. */

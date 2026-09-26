@@ -454,15 +454,23 @@ function pickPersonas(run: Run): number[] {
   ];
   const picked: number[] = [];
   const counties = new Set<string>();
+  // Six different first names, so the presenter can say "Priya" and everyone knows who.
+  const firsts = new Set<string>();
+  const first = (h: number) => H.name[h]!.split(" ")[0]!;
+  const free = (c: number) => !picked.includes(c) && !firsts.has(first(c));
   for (const test of want) {
-    const h = cands.find((c) => !picked.includes(c) && !counties.has(H.county[c]!) && test(c)) ?? cands.find((c) => !picked.includes(c) && test(c));
+    const h = cands.find((c) => free(c) && !counties.has(H.county[c]!) && test(c)) ?? cands.find((c) => free(c) && test(c));
     if (h === undefined) continue;
     picked.push(h);
     counties.add(H.county[h]!);
+    firsts.add(first(h));
   }
   for (const c of cands) {
     if (picked.length >= PERSONAS) break;
-    if (!picked.includes(c)) picked.push(c);
+    if (free(c)) {
+      picked.push(c);
+      firsts.add(first(c));
+    }
   }
   return picked.slice(0, PERSONAS);
 }

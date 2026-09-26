@@ -104,9 +104,10 @@ class RunState {
 }
 
 const usd = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-const shortItem = (name: string) => {
+/** "Bottled water, 24-pack" -> "bottled water"; acronyms stay ("AA batteries", "LED flashlight"). */
+export const shortItem = (name: string) => {
   const s = name.split(",")[0]!;
-  return s.charAt(0).toLowerCase() + s.slice(1);
+  return /^[A-Z][A-Z]/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1);
 };
 
 /**
