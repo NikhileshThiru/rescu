@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "bench": "tsx src/bench.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "devnet-proof": "tsx src/devnet-proof.ts"
   },
   "dependencies": {
     "@anchor-lang/core": "1.1.2",
