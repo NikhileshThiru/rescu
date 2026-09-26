@@ -1,14 +1,15 @@
 "use client";
 
-import { explorerAddress, explorerTx, type FeedItem, type Kpis, type RunInfo } from "@rescu/live";
+import { explorerAddress, explorerTx, type FeedItem, type FeedOrigin, type Kpis, type RunInfo } from "@rescu/live";
 import { AnimatePresence, motion } from "motion/react";
 import { type ReactNode, useEffect, useId, useState } from "react";
 import { type SimClock, useClockTime } from "@/lib/clock";
-import { compact, formatClock, int, pct, relative, usd, usdCompact } from "@/lib/format";
+import { compact, formatClock, int, pct, relative, ruleLabel as ruleName, usd, usdCompact } from "@/lib/format";
 import { type LiveClient, useLive } from "@/lib/live";
 import type { Timeline } from "@/lib/storm-data";
 import { NumberTicker } from "../ui/number-ticker";
-import { Badge, Button, Dot, Section, Stat } from "../ui/primitives";
+import { Badge, Button, cx, Dot, Section, Stat } from "../ui/primitives";
+import { frozenWallets, OracleBlock, suspendedStores } from "./oracle-rail";
 
 const CATEGORY_STYLE: Record<string, { label: string; color: string }> = {
   grocery: { label: "Groceries", color: "#2dd4bf" },
@@ -30,21 +31,19 @@ const FEED_TONE: Record<FeedItem["kind"], "teal" | "red" | "storm" | "amber"> = 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
 
 function ruleLabel(rule: string, run: RunInfo): string {
-  switch (rule) {
-    case "ResaleBlocked":
-      return "Resale to residents";
-    case "NotRegisteredMerchant":
-      return "Unregistered store";
-    case "OverOrderCap":
-      return `Over ${usd(run.rules.perOrderCapUsd)} per order`;
-    case "OverDailyCap":
-      return `Over ${usd(run.rules.dailyCapUsd)} per 24 h`;
-    case "AidExpired":
-      return "After Day 30 expiry";
-    default:
-      return rule.replace(/([a-z])([A-Z])/g, "$1 $2");
-  }
+  return ruleName(rule, run.rules);
 }
+
+/** Who started a feed row, when it wasn't the sim's own households. */
+const ORIGIN_BADGE: Partial<Record<FeedOrigin, { label: string; cls: string }>> = {
+  agent: { label: "Grok", cls: "border-storm/20 bg-storm-soft text-storm" },
+  shop: { label: "Phone", cls: "border-teal/20 bg-teal-soft text-teal" },
+  join: { label: "Phone", cls: "border-teal/20 bg-teal-soft text-teal" },
+  mcp: { label: "Agent", cls: "border-storm/20 bg-storm-soft text-storm" },
+  counter: { label: "Counter", cls: "border-line bg-surface-3 text-text-2" },
+  oracle: { label: "Oracle", cls: "border-amber/25 bg-amber-soft text-amber" },
+  breakit: { label: "Test", cls: "border-line bg-surface-3 text-text-2" },
+};
 
 /**
  * The live relief network in the rail: prepare, declare & fund, then real on-chain aid and
@@ -266,11 +265,12 @@ function Running({ run, live, timeline, history }: { run: RunInfo; live: LiveCli
       {!kpis ? (
         <Note>Waiting for the first numbers from Tiger…</Note>
       ) : closedOut ? (
-        <Closed run={run} kpis={kpis} />
+        <Closed run={run} kpis={kpis} live={live} />
       ) : (
         <Flowing run={run} kpis={kpis} />
       )}
       {kpis && <Blocked run={run} kpis={kpis} />}
+      <OracleBlock live={live} stores={run.merchants} />
       <Feed live={live} run={run} />
       {kpis && <Categories kpis={kpis} />}
       {kpis && <TigerLine kpis={kpis} />}
@@ -341,8 +341,11 @@ function Flowing({ run, kpis }: { run: RunInfo; kpis: Kpis }) {
   );
 }
 
-function Closed({ run, kpis }: { run: RunInfo; kpis: Kpis }) {
+function Closed({ run, kpis, live }: { run: RunInfo; kpis: Kpis; live: LiveClient }) {
   const balanced = Math.abs(kpis.disbursedUsd - kpis.spentUsd - kpis.returnedUsd) < 1;
+  const cases = useLive(live, (s) => s.cases);
+  const suspended = useLive(live, (s) => suspendedStores(s.stores));
+  const frozen = frozenWallets(cases);
   return (
     <>
       <div className="grid grid-cols-3 gap-3">
@@ -361,6 +364,21 @@ function Closed({ run, kpis }: { run: RunInfo; kpis: Kpis }) {
         {kpis.returnedUsd > 0 && balanced && <span className="text-teal">Disbursed = spent + returned, to the cent.</span>}
         {kpis.returnedUsd === 0 && `Returning ${usdCompact(run.budgetUsd - kpis.spentUsd)}…`}
       </p>
+      <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-2/60 px-2.5 py-1.5 text-2xs text-text-2 tabular">
+        <span className="size-1.5 shrink-0 rounded-full bg-amber" />
+        <span className="text-text-3">Oracle</span>
+        <span>
+          {int(cases.length)} {cases.length === 1 ? "case" : "cases"} opened
+        </span>
+        <span className="text-text-3">·</span>
+        <span className={suspended ? "text-red" : undefined}>
+          {int(suspended)} {suspended === 1 ? "store" : "stores"} suspended
+        </span>
+        <span className="text-text-3">·</span>
+        <span className={frozen ? "text-red" : undefined}>
+          {int(frozen)} {frozen === 1 ? "wallet" : "wallets"} frozen
+        </span>
+      </div>
     </>
   );
 }
@@ -430,6 +448,9 @@ function Feed({ live, run }: { live: LiveClient; run: RunInfo }) {
 
 function FeedRow({ item: f, index, run }: { item: FeedItem; index: number; run: RunInfo }) {
   const [entered, setEntered] = useState(false);
+  const badge = f.origin ? ORIGIN_BADGE[f.origin] : undefined;
+  const oracleRestore = f.kind === "oracle" && /reinstated|thawed/i.test(f.title);
+  const tone = f.kind === "oracle" ? (oracleRestore ? "teal" : "red") : FEED_TONE[f.kind];
   useEffect(() => {
     const raf = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(raf);
@@ -444,17 +465,31 @@ function FeedRow({ item: f, index, run }: { item: FeedItem; index: number; run: 
         href={f.signature ? explorerTx(f.signature, run.explorerCluster) : explorerAddress(run.declaration, run.explorerCluster)}
         target="_blank"
         rel="noreferrer"
-        className="group flex h-full items-start gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface-3/60"
+        className={cx(
+          "group flex h-full items-start gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface-3/60",
+          f.kind === "join" && "bg-teal/[0.06]",
+          f.kind === "oracle" && (oracleRestore ? "bg-teal/[0.05]" : "bg-red/[0.07]"),
+        )}
       >
         <span className="mt-[5px]">
-          <Dot tone={FEED_TONE[f.kind]} />
+          <Dot tone={tone} pulse={f.kind === "join" || f.kind === "oracle"} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2 text-xs">
-            <span className="truncate text-text">{f.title}</span>
-            <span className={`shrink-0 tabular ${f.kind === "blocked" ? "text-red line-through decoration-red/50" : "text-text-2"}`}>
-              {f.usd >= 1e4 ? usdCompact(f.usd) : `$${f.usd.toFixed(2)}`}
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span className={cx("truncate", f.kind === "join" ? "text-teal" : f.kind === "oracle" && !oracleRestore ? "text-red" : "text-text")}>
+                {f.title}
+              </span>
+              {badge && (
+                <span className={cx("shrink-0 rounded border px-1 text-[10px] font-medium leading-[14px]", badge.cls)}>{badge.label}</span>
+              )}
             </span>
+            {f.kind !== "oracle" && (
+              <span className={`shrink-0 tabular ${f.kind === "blocked" ? "text-red line-through decoration-red/50" : f.kind === "join" ? "text-teal" : "text-text-2"}`}>
+                {f.kind === "join" ? "+" : ""}
+                {f.usd >= 1e4 ? usdCompact(f.usd) : `$${f.usd.toFixed(2)}`}
+              </span>
+            )}
           </span>
           <span className="flex items-baseline justify-between gap-2 text-2xs text-text-3">
             <span className={`truncate ${f.kind === "blocked" ? "text-red/80" : ""}`}>{f.detail}</span>

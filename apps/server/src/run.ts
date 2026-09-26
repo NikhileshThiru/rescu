@@ -164,6 +164,9 @@ export class Run extends EventEmitter<NetworkEvents> {
   private lastInfoAt = 0;
   private batch = emptyBatch();
   private readonly abort = new AbortController();
+  /** Planted gougers in the order their markups start, and how many have started. */
+  private readonly gougeQ: number[];
+  private gougePtr = 0;
 
   constructor(
     readonly world: World,
@@ -179,12 +182,23 @@ export class Run extends EventEmitter<NetworkEvents> {
     this.clock = new ServerClock(world.domain.start, world.domain.end, DEFAULT_SPEED);
     this.rng = new Rng(`run:${this.key}`);
     this.hh = new Households(n);
-    this.shopper = new Shopper(world, this.rng);
     this.heap = new TimeHeap(n * 2);
     this.enrolled = new Uint8Array(n).fill(1);
     this.aidTries = new Uint8Array(n);
     this.budgetCents = world.budgetCents;
     this.market = new Market(world, (m) => this.merchantKeys[m]?.publicKey.toBase58() ?? "", `${world.slug}:${this.key}`);
+    // Shoppers pay what the store charges now (a gouger's markup included), skip sold-out items
+    // and stay away from stores the oracle suspended.
+    const market = this.market;
+    this.shopper = new Shopper(world, this.rng, {
+      price: (m, itemId, t) => market.price(m, itemId, t),
+      stock: (m, itemId, t) => market.stock(m, itemId, t),
+      approved: (m) => market.status[m] === "approved",
+    });
+    const M = world.merchants;
+    this.gougeQ = Array.from({ length: M.n }, (_, m) => m)
+      .filter((m) => M.gouge[m] !== 1 && !Number.isNaN(M.gougeFrom[m]!))
+      .sort((a, b) => M.gougeFrom[a]! - M.gougeFrom[b]!);
     this.activity = new Activity(world.merchants.n);
     this.people = new Residents(this);
     this.orders = new Orders(this);
@@ -535,6 +549,9 @@ export class Run extends EventEmitter<NetworkEvents> {
       void this.closeOut();
       return;
     }
+    while (this.gougePtr < this.gougeQ.length && this.world.merchants.gougeFrom[this.gougeQ[this.gougePtr]!]! <= t) {
+      this.startGouging(this.gougeQ[this.gougePtr++]!);
+    }
 
     // Shopping trips that are due, while the payment backlog is under BACKLOG_SECS of capacity;
     // beyond that, trips wait in the heap (the network is at its rate cap).
@@ -544,6 +561,18 @@ export class Run extends EventEmitter<NetworkEvents> {
       const [key, h] = this.heap.pop();
       if (key !== this.hh.nextTrip[h] || this.hh.done[h]) continue;
       const trip = this.shopper.trip(this.hh, h, t);
+      if (this.frozen.has(h)) {
+        // The oracle froze this wallet: one last try (the chain refuses it, AccountFrozen), then it gives up.
+        this.hh.done[h] = 1;
+        this.hh.nextTrip[h] = Infinity;
+        if (trip.kind === "orders") {
+          const o = trip.orders[0]!;
+          this.hh.reserved[h]! += o.amountCents;
+          this.hh.record(h, t, o.amountCents);
+          this.payQ.push({ orders: [o], t });
+        }
+        continue;
+      }
       if (trip.kind === "stop") {
         this.hh.done[h] = 1;
         this.hh.nextTrip[h] = Infinity;
@@ -678,7 +707,10 @@ export class Run extends EventEmitter<NetworkEvents> {
     const r = await this.chain.pay({ mint: this.mint, resident: this.residentKeys[h]!, merchant: dest.owner, cents: o.amountCents });
     this.hh.reserved[h]! -= o.amountCents;
     if (r.ok) this.hh.spent[h]! += o.amountCents;
-    else this.hh.forget(h, t, o.amountCents);
+    else {
+      this.hh.forget(h, t, o.amountCents);
+      if (r.decoded?.name === "OverDailyCap") this.hh.bounced[h] = 1;
+    }
     if (this.disposed) return;
     if (r.signature === null) {
       this.stats.dropped++;
@@ -724,6 +756,7 @@ export class Run extends EventEmitter<NetworkEvents> {
       merchantH3: p.dest.h3,
       latencyMs: r.latencyMs,
       signature: r.signature,
+      origin: p.origin === "sim" ? null : p.origin,
     });
 
     if (r.ok) {
@@ -958,6 +991,12 @@ export class Run extends EventEmitter<NetworkEvents> {
     if (!r.ok || this.disposed) return out;
     if (frozen) this.frozen.add(idx);
     else this.frozen.delete(idx);
+    const H = this.world.households;
+    if (frozen && idx < H.n && !this.hh.done[idx] && !Number.isNaN(this.hh.fundedAt[idx]!) && this.phase === "live") {
+      // A frozen household tries once more soon (the chain turns it away), then stops.
+      const soon = this.clock.now() + this.rng.range(1, 4) * HOUR;
+      if (this.hh.nextTrip[idx]! > soon) this.schedule(idx, soon);
+    }
     this.emit("resident", { resident: idx, frozen, caseId: this.residentCase.get(idx) ?? null, signature: r.signature });
     const simT = this.clock.now();
     const title = `${r0.name}'s wallet ${frozen ? "frozen" : "thawed"} by the oracle`;
@@ -979,6 +1018,22 @@ export class Run extends EventEmitter<NetworkEvents> {
     return this.market.listing(m, item, t);
   }
 
+  /** A planted gouger's markup starts: every marked-up item's new price, as the oracle and the terminal see it. */
+  private startGouging(m: number) {
+    const M = this.world.merchants;
+    const from = M.gougeFrom[m]!;
+    const at = Date.now();
+    for (const item of this.market.shelf(m)) {
+      if (this.market.hasOverride(m, item.id) || this.market.gougeAt(m, item.id, from) === 1) continue;
+      const pre = this.market.preStorm(m, item.id);
+      const cents = this.market.price(m, item.id, from);
+      if (cents === pre) continue;
+      this.market.noteChange(m, item.id, from, cents);
+      this.activity.push(m, { kind: "price", at, simT: from, cents, lines: [], resident: null, residentName: null, origin: "sim", signature: null, rule: null, detail: `${item.name}: $${(pre / 100).toFixed(2)} -> $${(cents / 100).toFixed(2)}` });
+      this.emit("price", { merchant: m, itemId: item.id, fromCents: pre, toCents: cents, simT: from, at, by: "planted" });
+    }
+  }
+
   /** An oracle case opened (caseId) or closed (null) on a store: its map dot turns amber. */
   flagStore(m: number, caseId: string | null): StoreState {
     const state = this.market.setFlag(m, caseId);
@@ -990,6 +1045,12 @@ export class Run extends EventEmitter<NetworkEvents> {
     if (caseId) this.residentCase.set(idx, caseId);
     else this.residentCase.delete(idx);
     this.emit("resident", { resident: idx, frozen: this.frozen.has(idx), caseId, signature: null });
+  }
+
+  /** A "Try to break it" attack (its own sandbox declaration) shows in the live feed; the run's numbers never see it. */
+  noteBreakit(item: Omit<FeedItem, "origin">) {
+    if (this.phase !== "live" && this.phase !== "ended") return;
+    this.pushFeed({ ...item, origin: "breakit" }, true);
   }
 
   /** `force`: app and oracle events are never dropped by the per-batch caps. */

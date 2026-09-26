@@ -288,7 +288,8 @@ export function buildWorld(input: StormInput, tracts: TractInput[], opts: { hous
   }
 
   // Planted bad actors for the oracle (gougers, duplicate registrations, collusion, velocity).
-  const planted: Planted[] = [];
+  // Drawn after everything above, so the honest households and stores don't move.
+  const planted = plantBadActors(rng, H, M, arrivalOf);
 
   return {
     slug: input.storm.slug,
@@ -304,6 +305,130 @@ export function buildWorld(input: StormInput, tracts: TractInput[], opts: { hous
     aidDueAt: arrivalOf,
     planted,
   };
+}
+
+/** How many bad actors a world plants (shares of stores / households). */
+export const PLANT = {
+  gougeShare: 0.02,
+  fraudShare: 0.01,
+  /** Of the fraud households: duplicate registrations, then collusion; the rest spend too fast. */
+  duplicateShare: 0.4,
+  collusionShare: 0.35,
+  colludersPerStore: 6,
+  gougeMin: 2,
+  gougeMax: 5,
+  /** Hours after the storm reaches the store that the markup starts. */
+  gougeAfterHours: [6, 30] as const,
+} as const;
+
+type HouseholdArrays = World["households"];
+type MerchantArrays = World["merchants"];
+
+/**
+ * Plants the oracle's ground truth: ~2% of stores gouge after the storm, ~1% of households
+ * commit fraud the transfer hook can't see (the same identity registered several times, trading
+ * aid for cash at a colluding store, spending as fast as the caps allow). Fraud households are
+ * never rule-breakers (ROGUE) and never personas. Deterministic for the world's rng.
+ */
+function plantBadActors(rng: Rng, H: HouseholdArrays, M: MerchantArrays, arrivalOf: (h3: string) => number): Planted[] {
+  const planted: Planted[] = [];
+  const C = CATEGORIES.length;
+  const free = (h: number) => !H.rogue[h] && H.fraud[h] === FRAUD.none;
+  const nFraud = Math.round(H.n * PLANT.fraudShare);
+  const nDup = Math.round(nFraud * PLANT.duplicateShare);
+  const nColl = Math.round(nFraud * PLANT.collusionShare);
+  const nVel = Math.max(0, nFraud - nDup - nColl);
+
+  // Collusion first: it picks the stores, and gougers stay clear of them.
+  const colluding = new Set<number>();
+  const shopsAt = (h: number, c: number, m: number) => {
+    for (let j = 0; j < NEAR_K; j++) if (H.near[(h * C + c) * NEAR_K + j] === m) return true;
+    return false;
+  };
+  let collLeft = nColl;
+  for (let guard = 0; collLeft >= 2 && guard < 400; guard++) {
+    const h0 = rng.int(0, H.n - 1);
+    const c = rng.chance(0.55) ? CATEGORIES.indexOf("grocery") : CATEGORIES.indexOf("general");
+    const m = H.near[(h0 * C + c) * NEAR_K]!;
+    if (!free(h0) || m < 0 || colluding.has(m)) continue;
+    const cands: number[] = [];
+    for (let h = 0; h < H.n; h++) if (free(h) && shopsAt(h, c, m)) cands.push(h);
+    // Enough aid to show up as a pattern (a few near-cap orders each).
+    const rich = cands.filter((h) => H.aidCents[h]! >= 40_000);
+    const pool = rich.length >= 3 ? rich : cands;
+    if (pool.length < 3) continue;
+    shuffleInPlace(rng, pool);
+    // At least three per store (a pattern, not a coincidence), so the last group may run one over.
+    const want = Math.min(Math.max(3, Math.min(collLeft, PLANT.colludersPerStore + rng.int(-1, 1))), pool.length);
+    const members = pool.slice(0, want);
+    for (const h of members) {
+      H.fraud[h] = FRAUD.collusion;
+      H.colludeWith[h] = m;
+    }
+    colluding.add(m);
+    planted.push({ kind: "collusion", merchants: [m], residents: members });
+    collLeft -= members.length;
+  }
+
+  // Duplicate identities: clusters of 3-5 registrations from one device (mostly the same phone
+  // and address too), in the same county.
+  let dupLeft = nDup;
+  for (let guard = 0; dupLeft >= 3 && guard < 400; guard++) {
+    const size = Math.min(dupLeft, rng.int(3, 5));
+    const h0 = rng.int(0, H.n - 1);
+    if (!free(h0)) continue;
+    const members = [h0];
+    // Households are in geoid order, so the next few are the same or a neighbouring tract.
+    for (let k = 1; k < 80 && members.length < size; k++) {
+      const h = h0 + k;
+      if (h < H.n && free(h) && H.county[h] === H.county[h0] && rng.chance(0.5)) members.push(h);
+    }
+    if (members.length < 3) continue;
+    for (const h of members) H.fraud[h] = FRAUD.duplicate;
+    for (const h of members.slice(1)) {
+      H.device[h] = H.device[h0]!;
+      if (rng.chance(0.75)) H.phone[h] = H.phone[h0]!;
+      if (rng.chance(0.6)) H.address[h] = H.address[h0]!;
+    }
+    planted.push({ kind: "duplicate_identity", merchants: [], residents: members });
+    dupLeft -= members.length;
+  }
+
+  // Velocity: households with a big enough grant to spend it as fast as the caps allow.
+  const velCands: number[] = [];
+  for (let h = 0; h < H.n; h++) if (free(h) && H.aidCents[h]! >= 80_000) velCands.push(h);
+  if (velCands.length < nVel) for (let h = 0; h < H.n; h++) if (free(h) && H.aidCents[h]! < 80_000) velCands.push(h);
+  shuffleInPlace(rng, velCands);
+  for (const h of velCands.slice(0, nVel)) {
+    H.fraud[h] = FRAUD.velocity;
+    planted.push({ kind: "velocity", merchants: [], residents: [h] });
+  }
+
+  // Gougers: busy stores (many households' nearest) that aren't colluding, marking up essentials
+  // some hours after the storm reaches them.
+  const busy = new Uint32Array(M.n);
+  for (let i = 0; i < H.near.length; i++) {
+    const m = H.near[i]!;
+    if (m >= 0) busy[m]!++;
+  }
+  const stores = Array.from({ length: M.n }, (_, m) => m).filter((m) => !colluding.has(m) && busy[m]! > 0);
+  stores.sort((a, b) => busy[b]! - busy[a]! || a - b);
+  const top = stores.slice(0, Math.max(1, Math.ceil(stores.length / 2)));
+  shuffleInPlace(rng, top);
+  const nGouge = Math.max(1, Math.round(M.n * PLANT.gougeShare));
+  for (const m of top.slice(0, nGouge)) {
+    M.gouge[m] = Math.round(rng.range(PLANT.gougeMin, PLANT.gougeMax) * 100) / 100;
+    M.gougeFrom[m] = arrivalOf(M.h3[m]!) + Math.round(rng.range(PLANT.gougeAfterHours[0], PLANT.gougeAfterHours[1]) * 3600);
+    planted.push({ kind: "gouging", merchants: [m], residents: [] });
+  }
+  return planted;
+}
+
+function shuffleInPlace<T>(rng: Rng, a: T[]) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng.next() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
 }
 
 const FIRST = [
@@ -339,4 +464,11 @@ export function isOpen(w: World, m: number, t: number): boolean {
 export function countyLabel(w: World, fips: string): string {
   const c = w.counties.get(fips);
   return c ? `${c.name.replace(/ (County|Parish)$/, "")}, ${c.state}` : fips;
+}
+
+/** Stores planted as gougers or colluders. */
+export function plantedStores(w: World): Set<number> {
+  const out = new Set<number>();
+  for (const p of w.planted) for (const m of p.merchants) out.add(m);
+  return out;
 }

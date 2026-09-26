@@ -98,6 +98,11 @@ export class Market {
     return g === 1 ? pre : shelfRound(pre * g);
   }
 
+  /** The merchant terminal set this item's price (it wins over any planted markup). */
+  hasOverride(m: number, itemId: number): boolean {
+    return this.overrides.has(key(m, itemId));
+  }
+
   /** Sets a listed price (merchant terminal). Returns the previous price. */
   setPrice(m: number, itemId: number, cents: number, t: number): number {
     const before = this.price(m, itemId, t);

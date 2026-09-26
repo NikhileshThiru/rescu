@@ -7,6 +7,7 @@ import { LiveClient, useLive } from "@/lib/live";
 import { LiveEffects } from "@/lib/live-effects";
 import { buildTimeline, DEMO_STORMS, loadStorm, type StormFile, type Timeline } from "@/lib/storm-data";
 import { Panel } from "../ui/primitives";
+import { BreakitDrawer } from "./breakit-drawer";
 import { HexTooltip } from "./hex-tooltip";
 import { MapControls } from "./map-controls";
 import { type HexHover, type LayerMode, MapView, type MapViewHandle } from "./map-view";
@@ -52,6 +53,8 @@ export function CommandCenter() {
   const [hover] = useState(createHoverStore);
   const [mapReady, setMapReady] = useState(false);
   const [cameraAuto, setCameraAuto] = useState(true);
+  const [breakit, setBreakit] = useState(false);
+  const [qr, setQr] = useState(false);
   const map = useRef<MapViewHandle>(null);
   const flown = useRef<string | null>(null);
   const [live] = useState(() => new LiveClient());
@@ -127,7 +130,16 @@ export function CommandCenter() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "b" || e.key === "B") {
+        setBreakit((o) => !o);
+        setQr(false);
+        return;
+      }
+      if (e.key === "q" || e.key === "Q") {
+        setQr((o) => !o);
+        return;
+      }
       if (e.code === "Space") {
         e.preventDefault();
         clock.setPlaying(!clock.playing);
@@ -160,7 +172,18 @@ export function CommandCenter() {
       {/* Soft edge vignette so panels sit on a calm frame. */}
       <div className="pointer-events-none absolute inset-0 z-[5] bg-[radial-gradient(ellipse_at_center,transparent_60%,rgba(4,6,12,0.32)_100%)]" />
 
-      <TopBar storms={DEMO_STORMS} slug={slug} onStorm={setSlug} clock={clock} timeline={timeline} live={live} />
+      <TopBar
+        clock={clock}
+        timeline={timeline}
+        live={live}
+        breakitOpen={breakit}
+        onBreakit={() => {
+          setBreakit((o) => !o);
+          setQr(false);
+        }}
+        qrOpen={qr}
+        onQr={setQr}
+      />
 
       <AnimatePresence>
         {file && timeline && (
@@ -172,6 +195,9 @@ export function CommandCenter() {
             className="pointer-events-none absolute inset-0 z-10"
           >
             <MapControls
+              storms={DEMO_STORMS}
+              slug={slug}
+              onStorm={setSlug}
               mode={mode}
               onMode={setMode}
               res={res}
@@ -186,6 +212,7 @@ export function CommandCenter() {
               </Panel>
             </div>
             <HexTooltip store={hover} file={file} clock={clock} />
+            <BreakitDrawer open={breakit} onClose={() => setBreakit(false)} live={live} />
           </motion.div>
         )}
       </AnimatePresence>

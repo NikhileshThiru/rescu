@@ -5,10 +5,13 @@ import { SPEEDS, type SimClock, useClockState } from "@/lib/clock";
 import { formatClock, relative, usd } from "@/lib/format";
 import { type LiveClient, useLive } from "@/lib/live";
 import type { StormListing, Timeline } from "@/lib/storm-data";
+import { AppNav } from "../ui/app-nav";
 import { NumberTicker } from "../ui/number-ticker";
-import { Badge, Button, Dot, Kbd, Segmented } from "../ui/primitives";
+import { Badge, Button, cx, Dot, Kbd, Segmented } from "../ui/primitives";
+import { ShieldIcon } from "./breakit-drawer";
+import { ScanToJoin } from "./scan-to-join";
 
-export function Logo() {
+export function Logo({ compact }: { compact?: boolean } = {}) {
   return (
     <div className="flex items-center gap-2.5">
       <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
@@ -16,7 +19,7 @@ export function Logo() {
         <path d="M12 7v10M8 11.5l4 4 4-4" fill="none" stroke="#e6edf7" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <span className="text-[15px] font-semibold tracking-tight">Rescu</span>
-      <span className="hidden text-sm text-text-3 lg:inline">Command Center</span>
+      {!compact && <span className="hidden text-sm text-text-3 lg:inline">Command Center</span>}
     </div>
   );
 }
@@ -73,31 +76,43 @@ export function TopBar({
   clock,
   timeline,
   live,
+  breakitOpen,
+  onBreakit,
+  qrOpen,
+  onQr,
 }: {
-  storms: StormListing[];
-  slug: string;
-  onStorm: (slug: string) => void;
+  /** Legacy: the storm picker now lives in MapControls; pass these to keep it here. */
+  storms?: StormListing[];
+  slug?: string;
+  onStorm?: (slug: string) => void;
   clock: SimClock;
   timeline: Timeline | null;
   live: LiveClient;
+  breakitOpen?: boolean;
+  onBreakit?: () => void;
+  qrOpen?: boolean;
+  onQr?: (open: boolean) => void;
 }) {
   const { playing, speed } = useClockState(clock);
   return (
-    <header className="glass pointer-events-auto absolute inset-x-0 top-0 z-20 flex h-14 items-center gap-6 border-b border-line px-4">
-      <Logo />
-      <Segmented
-        value={slug}
-        onChange={onStorm}
-        options={storms.map((s) => ({
-          value: s.slug,
-          label: (
-            <>
-              {s.name}
-              <span className="text-text-3 tabular">{s.year}</span>
-            </>
-          ),
-        }))}
-      />
+    <header className="glass pointer-events-auto absolute inset-x-0 top-0 z-20 flex h-14 items-center gap-5 border-b border-line px-4">
+      <Logo compact />
+      <AppNav />
+      {storms && slug && onStorm && (
+        <Segmented
+          value={slug}
+          onChange={onStorm}
+          options={storms.map((s) => ({
+            value: s.slug,
+            label: (
+              <>
+                {s.name}
+                <span className="text-text-3 tabular">{s.year}</span>
+              </>
+            ),
+          }))}
+        />
+      )}
       <div className="mx-auto flex items-center gap-3">
         <Button
           variant="outline"
@@ -115,9 +130,26 @@ export function TopBar({
           onChange={(s) => clock.setSpeed(s)}
           options={SPEEDS.map((s) => ({ value: s.scale, label: s.label, title: s.hint }))}
         />
-        <span className="hidden items-center gap-1 text-2xs text-text-3 xl:flex">
+        <span className="hidden items-center gap-1 text-2xs text-text-3 2xl:flex">
           <Kbd>Space</Kbd> play
         </span>
+      </div>
+      <div className="flex items-center gap-2">
+        {onBreakit && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onBreakit}
+            aria-pressed={!!breakitOpen}
+            title="Try to break it (B)"
+            className={cx("h-8 gap-2 pl-2.5 pr-2", breakitOpen && "border-red/40 bg-red-soft text-text")}
+          >
+            <ShieldIcon className="text-red" />
+            <span>Try to break it</span>
+            <Kbd>B</Kbd>
+          </Button>
+        )}
+        {onQr && <ScanToJoin open={!!qrOpen} onOpenChange={onQr} />}
       </div>
       <Treasury live={live} />
     </header>

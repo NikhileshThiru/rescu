@@ -18,10 +18,11 @@ import type { SimClock } from "@/lib/clock";
 import { category, mph } from "@/lib/format";
 import { HexField } from "@/lib/hex-field";
 import type { LiveEffects } from "@/lib/live-effects";
-import { effectLayers, merchantLayer } from "@/lib/live-layers";
+import { effectLayers, merchantLayer, spotLayers, spotMarkerLayer, storeStatusLayers } from "@/lib/live-layers";
 import { firstLabelLayer, loadMapStyle } from "@/lib/map-style";
 import type { StormFile } from "@/lib/storm-data";
 import { stormFrame, stormLayers } from "@/lib/storm-layers";
+import { SpotLabels } from "./spot-labels";
 
 export type LayerMode = "wind" | "aid";
 
@@ -80,6 +81,7 @@ export const MapView = forwardRef<
 >(function MapView({ file, res, mode, clock, effects = null, onHover, onReady, onCameraAuto }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const labelEl = useRef<HTMLDivElement>(null);
+  const spotRoot = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const beforeId = useRef<string | undefined>(undefined);
@@ -235,6 +237,8 @@ export const MapView = forwardRef<
     let last = performance.now();
     let labelKey = "";
     const landfallAge = new Map<number, number>();
+    const spots = spotRoot.current ? new SpotLabels(spotRoot.current) : null;
+    let spotsShown = false;
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - last) / 1000);
@@ -326,7 +330,11 @@ export const MapView = forwardRef<
       const zoom = map.getZoom();
       if (fx) fx.zoom = zoom;
       const stores = fx?.merchants();
-      if (stores) layers.push(merchantLayer(stores, clock.t, zoom, beforeId.current));
+      const nowSec = now / 1000;
+      if (stores) {
+        layers.push(merchantLayer(stores, clock.t, zoom, beforeId.current));
+        layers.push(...storeStatusLayers(fx!.storeMarks(), zoom, nowSec, l.reduceMotion, beforeId.current));
+      }
       layers.push(
         ...stormLayers({
           storm,
@@ -338,8 +346,18 @@ export const MapView = forwardRef<
           cloudFade: l.mix,
         }),
       );
-      if (fx && !l.reduceMotion) layers.push(...effectLayers(fx, now / 1000, beforeId.current));
+      const labels = fx ? fx.labelsAt(nowSec) : [];
+      if (fx && !l.reduceMotion) layers.push(...effectLayers(fx, nowSec, beforeId.current), ...spotLayers(fx, nowSec, beforeId.current));
+      if (fx && l.reduceMotion) {
+        const still = spotMarkerLayer(labels, beforeId.current);
+        if (still) layers.push(still);
+      }
       overlay.setProps({ layers });
+
+      if (spots && (labels.length || spotsShown)) {
+        spots.frame(labels, map, nowSec, dt, l.reduceMotion);
+        spotsShown = labels.length > 0;
+      }
 
       const el = labelEl.current;
       if (el) {
@@ -359,12 +377,16 @@ export const MapView = forwardRef<
       }
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      spots?.destroy();
+    };
   }, [clock]);
 
   return (
     <div className="absolute inset-0">
       <div ref={container} className="h-full w-full" />
+      <div ref={spotRoot} className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden />
       <div
         ref={labelEl}
         className="pointer-events-none absolute left-0 top-0 flex items-center gap-2 whitespace-nowrap opacity-0 transition-opacity duration-500"

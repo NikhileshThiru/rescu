@@ -1,7 +1,7 @@
-import { GENERATOR, type Item, NEEDS, type Need, needWeights, SELLS_NEED, shelfCents, STOCK } from "./catalog.js";
+import { ALL_ITEMS, GENERATOR, type Item, NEEDS, type Need, needWeights, SELLS_NEED, shelfCents, STOCK } from "./catalog.js";
 import type { MerchantCategory } from "@rescu/live";
 import type { Rng } from "./rng.js";
-import { CATEGORIES, isOpen, NEAR_K, ROGUE, type World } from "./world.js";
+import { CATEGORIES, FRAUD, isOpen, NEAR_K, ROGUE, type World } from "./world.js";
 
 const HOUR = 3600;
 const DAY = 86400;
@@ -24,6 +24,24 @@ export const PLAN = {
   minOrderCents: 1_200,
 } as const;
 
+/** The chain's real limits. Only planted "velocity" households plan against these (and so sometimes bounce). */
+export const CHAIN_CAPS = { orderCents: 20_000, windowSecs: 24 * HOUR, windowCents: 30_000 } as const;
+
+/** What shoppers read from the live market: the price a store charges now, its stock, whether it can take aid. */
+export interface ShopMarket {
+  price(m: number, itemId: number, t: number): number;
+  stock(m: number, itemId: number, t: number): number;
+  /** Approved on-chain (suspended and pending stores refuse relief dollars). */
+  approved(m: number): boolean;
+}
+
+/** Pre-storm shelf prices, unlimited stock, every store approved (tests and offline planning). */
+export const SHELF_MARKET: ShopMarket = {
+  price: (m, itemId) => (itemId === GENERATOR.id ? GENERATOR.cents : shelfCents(m, ALL_ITEMS[itemId]!)),
+  stock: () => 1_000,
+  approved: () => true,
+};
+
 export interface OrderLine {
   id: number;
   qty: number;
@@ -38,6 +56,8 @@ export interface Order {
   amountCents: number;
   need: Need;
   rogue: number;
+  /** Planted fraud (FRAUD kind), 0 = honest. The chain can't see it; the oracle can. */
+  fraud?: number;
   /** Rule-breakers only: pay this resident's wallet instead of a store. */
   resaleTo?: number;
   /** Rule-breakers only: pay this unregistered store (index into the run's rogue stores). */
@@ -53,6 +73,8 @@ export class Households {
   readonly nextTrip: Float64Array;
   readonly done: Uint8Array;
   readonly rogueDone: Uint8Array;
+  /** The chain turned this household's last order away for the 24 h cap (velocity shoppers react to it). */
+  readonly bounced: Uint8Array;
   private readonly ringT: Float64Array;
   private readonly ringC: Int32Array;
   private readonly ringAt: Uint8Array;
@@ -65,6 +87,7 @@ export class Households {
     this.nextTrip = new Float64Array(n).fill(Infinity);
     this.done = new Uint8Array(n);
     this.rogueDone = new Uint8Array(n);
+    this.bounced = new Uint8Array(n);
     this.ringT = new Float64Array(n * PLAN.ring).fill(-Infinity);
     this.ringC = new Int32Array(n * PLAN.ring);
     this.ringAt = new Uint8Array(n);
@@ -72,16 +95,21 @@ export class Households {
 
   /** Spent (or in flight) inside the planning window ending at t, and when the oldest of it ages out. */
   window(h: number, t: number): { cents: number; freesAt: number } {
+    return this.windowOver(h, t, PLAN.windowSecs);
+  }
+
+  /** Same, over a window of `secs` (velocity shoppers use the chain's real 24 h). */
+  windowOver(h: number, t: number, secs: number): { cents: number; freesAt: number } {
     let cents = 0;
     let oldest = Infinity;
     for (let k = 0; k < PLAN.ring; k++) {
       const at = this.ringT[h * PLAN.ring + k]!;
-      if (at > t - PLAN.windowSecs) {
+      if (at > t - secs) {
         cents += this.ringC[h * PLAN.ring + k]!;
         oldest = Math.min(oldest, at);
       }
     }
-    return { cents, freesAt: oldest + PLAN.windowSecs };
+    return { cents, freesAt: oldest + secs };
   }
 
   record(h: number, t: number, cents: number) {
@@ -122,6 +150,7 @@ export class Shopper {
   constructor(
     readonly world: World,
     readonly rng: Rng,
+    readonly market: ShopMarket = SHELF_MARKET,
   ) {}
 
   /** Called once when a household's aid confirms. */
@@ -130,6 +159,15 @@ export class Shopper {
     s.fundedAt[h] = t;
     s.target[h] = Math.round(aid * this.rng.range(0.72, 0.98));
     s.nextTrip[h] = t + this.rng.range(2, 20) * HOUR;
+    const fraud = this.world.households.fraud[h]!;
+    if (fraud === FRAUD.collusion) {
+      // Trades most of the grant for cash at the colluding store, starting within a day.
+      s.target[h] = Math.round(aid * this.rng.range(0.85, 1));
+      s.nextTrip[h] = t + this.rng.range(6, 24) * HOUR;
+    } else if (fraud === FRAUD.velocity) {
+      s.target[h] = aid;
+      s.nextTrip[h] = t + this.rng.range(1, 3) * HOUR;
+    }
     const rogue = this.world.households.rogue[h]!;
     // Rule-breaking only makes sense with enough balance to get past Token-2022's own balance check.
     if (rogue === ROGUE.generator && aid < 52_000) this.world.households.rogue[h] = ROGUE.none;
@@ -141,6 +179,10 @@ export class Shopper {
     if (t > W.domain.end - 12 * HOUR) return { kind: "stop" };
     const days = (t - s.fundedAt[h]!) / DAY;
     const balance = W.households.aidCents[h]! - s.spent[h]! - s.reserved[h]!;
+
+    const fraud = W.households.fraud[h]!;
+    if (fraud === FRAUD.collusion) return this.collude(s, h, t);
+    if (fraud === FRAUD.velocity) return this.rush(s, h, t, days);
 
     const rogue = W.households.rogue[h]!;
     if (rogue && !s.rogueDone[h] && days >= 1) {
@@ -166,7 +208,7 @@ export class Shopper {
         weights[NEEDS.indexOf(need)] = 0;
         continue;
       }
-      const lines = this.basket(m, need, budget, weights);
+      const lines = this.basket(m, need, budget, weights, t);
       const amountCents = total(lines);
       if (!lines.length || amountCents < 300) continue;
       return { kind: "orders", orders: [{ household: h, merchant: m, lines, amountCents, need, rogue: 0 }], next: t + this.gap(days) };
@@ -195,7 +237,7 @@ export class Shopper {
       const c = CATEGORIES.indexOf(cat);
       for (let j = 0; j < NEAR_K; j++) {
         const m = H.near[(h * CATEGORIES.length + c) * NEAR_K + j]!;
-        if (m < 0 || !isOpen(W, m, t)) continue;
+        if (m < 0 || !isOpen(W, m, t) || !this.market.approved(m)) continue;
         const dx = (W.merchants.lon[m]! - H.lon[h]!) * k;
         const dy = W.merchants.lat[m]! - H.lat[h]!;
         const d = dx * dx + dy * dy;
@@ -205,8 +247,11 @@ export class Shopper {
     return best;
   }
 
-  /** Items from the store's shelf: the main need first, then whatever else the household needs. */
-  basket(m: number, need: Need, budget: number, weights: number[]): OrderLine[] {
+  /**
+   * Items from the store's shelf at what it charges now (a gouger's markup included): the main
+   * need first, then whatever else the household needs. Sold-out items are skipped.
+   */
+  basket(m: number, need: Need, budget: number, weights: number[], t: number): OrderLine[] {
     const shelf = STOCK[this.world.merchants.category[m]!];
     const primary = shelf.filter((i) => i.need === need);
     const others = shelf.filter((i) => i.need !== need && weights[NEEDS.indexOf(i.need)]! > 0);
@@ -214,8 +259,8 @@ export class Shopper {
     const lines: OrderLine[] = [];
     let total = 0;
     for (const item of order) {
-      const cents = shelfCents(m, item);
-      const room = Math.floor((budget - total) / cents);
+      const cents = this.market.price(m, item.id, t);
+      const room = Math.min(Math.floor((budget - total) / cents), this.market.stock(m, item.id, t));
       if (room < 1) continue;
       const qty = Math.min(room, this.rng.int(1, item.maxQty));
       lines.push({ id: item.id, qty, cents });
@@ -253,13 +298,73 @@ export class Shopper {
     const balance = this.world.households.aidCents[h]! - s.spent[h]! - s.reserved[h]!;
     if (m < 0 || balance < 46_000 || s.window(h, t).cents > 0) return null;
     const weights = needWeights(days, !!this.world.households.kids[h], !!this.world.households.pet[h]);
-    const first = this.basket(m, "food", 15_000, weights);
+    const first = this.basket(m, "food", 15_000, weights, t);
     const a1 = total(first);
-    const second = this.basket(m, "water", 30_000 - a1, weights);
-    const third = this.basket(m, "food", 12_000, weights);
+    const second = this.basket(m, "water", 30_000 - a1, weights, t);
+    const third = this.basket(m, "food", 12_000, weights, t);
     const sum = a1 + total(second);
     if (!first.length || !second.length || sum > 30_000 || sum + total(third) < 31_000) return null;
     return [first, second, third].map((lines) => ({ household: h, merchant: m, lines, amountCents: total(lines), need: "food" as Need, rogue: ROGUE.spree }));
+  }
+
+  /** A basket filled close to `budget` from anything on the shelf (fraud: the goods don't matter). */
+  fill(m: number, budget: number, t: number): OrderLine[] {
+    const lines: OrderLine[] = [];
+    let sum = 0;
+    for (const item of this.shuffle(STOCK[this.world.merchants.category[m]!])) {
+      const cents = this.market.price(m, item.id, t);
+      const qty = Math.min(Math.floor((budget - sum) / cents), item.maxQty, this.market.stock(m, item.id, t));
+      if (qty < 1) continue;
+      lines.push({ id: item.id, qty, cents });
+      sum += qty * cents;
+      if (sum >= budget * 0.95 || lines.length >= 12) break;
+    }
+    return lines;
+  }
+
+  /**
+   * Collusion: near-cap "purchases" at the one colluding store (the store hands back cash), one
+   * per planning window so they never trip a cap themselves, until most of the grant is gone.
+   */
+  private collude(s: Households, h: number, t: number): Trip {
+    const W = this.world;
+    const m = W.households.colludeWith[h]!;
+    const balance = W.households.aidCents[h]! - s.spent[h]! - s.reserved[h]!;
+    const left = Math.min(s.target[h]! - s.spent[h]! - s.reserved[h]!, balance);
+    // Scheme over: grant used up, or the oracle suspended the store.
+    if (m < 0 || left < PLAN.minOrderCents || !this.market.approved(m)) return { kind: "stop" };
+    const win = s.window(h, t);
+    const size = Math.min(left, Math.round(this.rng.range(15_000, PLAN.orderCapCents)));
+    if (win.cents + size > PLAN.windowCapCents) return { kind: "later", next: win.freesAt + this.rng.range(0.5, 4) * HOUR };
+    const lines = this.fill(m, size, t);
+    if (!lines.length) return { kind: "later", next: t + this.rng.range(6, 12) * HOUR };
+    const order: Order = { household: h, merchant: m, lines, amountCents: total(lines), need: "food", rogue: 0, fraud: FRAUD.collusion };
+    return { kind: "orders", orders: [order], next: t + this.rng.range(26, 34) * HOUR };
+  }
+
+  /**
+   * Velocity: a full-size order every 1-3 hours, planned against the chain's real 24 h window
+   * with no margin. A full order that doesn't fit bounces (OverDailyCap); the next one takes
+   * exactly what's left, so the grant drains as fast as the caps allow.
+   */
+  private rush(s: Households, h: number, t: number, days: number): Trip {
+    const W = this.world;
+    const balance = W.households.aidCents[h]! - s.spent[h]! - s.reserved[h]!;
+    if (balance < PLAN.minOrderCents) return { kind: "stop" };
+    const win = s.windowOver(h, t, CHAIN_CAPS.windowSecs);
+    const headroom = CHAIN_CAPS.windowCents - win.cents;
+    if (headroom < 1_500) return { kind: "later", next: win.freesAt + this.rng.range(0.2, 1.5) * HOUR };
+    const size = Math.min(balance, s.bounced[h] ? headroom : Math.round(this.rng.range(17_500, 19_900)));
+    s.bounced[h] = 0;
+    const weights = needWeights(days, !!W.households.kids[h], !!W.households.pet[h]);
+    let m = -1;
+    for (let attempt = 0; attempt < 3 && m < 0; attempt++) m = this.nearestOpen(h, NEEDS[this.rng.weighted(weights)]!, t);
+    if (m < 0) m = this.nearestOpenIn(h, CATEGORIES, t);
+    if (m < 0) return { kind: "later", next: t + this.rng.range(3, 8) * HOUR };
+    const lines = this.fill(m, size, t);
+    if (!lines.length) return { kind: "later", next: t + this.rng.range(1, 3) * HOUR };
+    const order: Order = { household: h, merchant: m, lines, amountCents: total(lines), need: "food", rogue: 0, fraud: FRAUD.velocity };
+    return { kind: "orders", orders: [order], next: t + this.rng.range(1, 3) * HOUR };
   }
 
   private shuffle<T>(xs: T[]): T[] {

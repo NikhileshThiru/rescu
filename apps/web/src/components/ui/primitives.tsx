@@ -87,16 +87,19 @@ export function Segmented<T extends string | number>({
   onChange,
   size = "md",
   className,
+  stretch,
 }: {
   value: T;
   options: { value: T; label: ReactNode; title?: string }[];
   onChange: (v: T) => void;
   size?: "sm" | "md";
   className?: string;
+  /** Fill the container's width, options sharing it equally. */
+  stretch?: boolean;
 }) {
   const id = useId();
   return (
-    <div role="radiogroup" className={cx("relative inline-flex rounded-lg border border-line bg-surface-1/80 p-0.5", className)}>
+    <div role="radiogroup" className={cx("relative inline-flex rounded-lg border border-line bg-surface-1/80 p-0.5", stretch && "flex w-full", className)}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -108,6 +111,7 @@ export function Segmented<T extends string | number>({
             onClick={() => onChange(o.value)}
             className={cx(
               "relative z-0 inline-flex items-center gap-1.5 rounded-md font-medium transition-colors duration-150",
+              stretch && "flex-1 justify-center",
               size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-3 text-sm",
               active ? "text-text" : "text-text-3 hover:text-text-2",
             )}

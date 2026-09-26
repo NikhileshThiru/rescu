@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import type { StormListing } from "@/lib/storm-data";
 import { AID_STOPS, WIND_STOPS } from "@/lib/tokens";
 import { Button, Kbd, Panel, Segmented } from "../ui/primitives";
 import type { LayerMode } from "./map-view";
@@ -9,6 +10,9 @@ const gradient = (stops: [number, [number, number, number]][]) =>
   `linear-gradient(90deg, ${stops.map(([, c], i) => `rgb(${c.join(",")}) ${(100 * i) / (stops.length - 1)}%`).join(", ")})`;
 
 export function MapControls({
+  storms,
+  slug,
+  onStorm,
   mode,
   onMode,
   res,
@@ -16,6 +20,10 @@ export function MapControls({
   cameraAuto,
   onFollow,
 }: {
+  /** The storm picker lives here (the top bar holds the app nav and the clock). */
+  storms?: StormListing[];
+  slug?: string;
+  onStorm?: (slug: string) => void;
   mode: LayerMode;
   onMode: (m: LayerMode) => void;
   res: number;
@@ -27,6 +35,20 @@ export function MapControls({
   return (
     <div className="pointer-events-auto absolute left-4 top-[72px] z-10 w-[268px]">
       <Panel className="p-3">
+        {storms && slug && onStorm && (
+          <div className="mb-3 border-b border-line pb-3">
+            <div className="mb-1.5 flex items-baseline justify-between">
+              <span className="eyebrow">Storm</span>
+              <span className="text-2xs text-text-3 tabular">{storms.find((s) => s.slug === slug)?.year}</span>
+            </div>
+            <Segmented
+              stretch
+              value={slug}
+              onChange={onStorm}
+              options={storms.map((s) => ({ value: s.slug, label: s.name, title: `Hurricane ${s.name} (${s.year})` }))}
+            />
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <Segmented
             value={mode}

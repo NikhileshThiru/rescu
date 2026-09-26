@@ -62,3 +62,40 @@ export function relative(deltaSec: number): string {
   else s = `${Math.floor(hours / 24)} d ${hours % 24} h`;
   return future ? `in ${s}` : `${s} ago`;
 }
+
+/** Plain-English name for an on-chain rule ("OverDailyCap" -> "Over $300 per 24 h"). */
+export function ruleLabel(rule: string, caps?: { perOrderCapUsd: number; dailyCapUsd: number } | null): string {
+  switch (rule) {
+    case "ResaleBlocked":
+      return "Resale to residents";
+    case "NotRegisteredMerchant":
+      return "Unregistered store";
+    case "OverOrderCap":
+      return `Over ${usd(caps?.perOrderCapUsd ?? 200)} per order`;
+    case "OverDailyCap":
+      return `Over ${usd(caps?.dailyCapUsd ?? 300)} per 24 h`;
+    case "AidExpired":
+      return "After Day 30 expiry";
+    case "MerchantSuspended":
+      return "Store suspended";
+    case "MerchantNotApproved":
+      return "Store not approved yet";
+    case "AccountFrozen":
+      return "Wallet frozen";
+    case "OutOfZone":
+      return "Outside the disaster zone";
+    case "InsufficientFunds":
+      return "Over the agent's allowance";
+    case "NotTransferring":
+      return "Not a real transfer";
+    case "Unauthorized":
+      return "Not the oracle";
+    default:
+      return rule.replace(/([a-z])([A-Z])/g, "$1 $2");
+  }
+}
+
+/** "$12.99" under $10k, "$24K" above. */
+export function money(x: number): string {
+  return Math.abs(x) >= 1e4 ? usdCompact(x) : `$${x.toFixed(2)}`;
+}

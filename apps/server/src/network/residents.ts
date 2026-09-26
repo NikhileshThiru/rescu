@@ -19,7 +19,7 @@ import { latLngToCell } from "h3-js";
 import { config } from "../config.js";
 import type { Run } from "../run.js";
 import { deriveKeypair } from "../wallets.js";
-import { countyLabel, FRAUD } from "../world.js";
+import { CATEGORIES, countyLabel, FRAUD, NEAR_K, plantedStores } from "../world.js";
 import { ApiFail } from "./errors.js";
 import { haversineKm } from "./market.js";
 
@@ -411,8 +411,15 @@ function pickPersonas(run: Run): number[] {
   const H = W.households;
   const lf = W.domain.landfall;
   const cands: number[] = [];
+  // Keep the demo clean: no persona lives next to a planted gouger or colluding store.
+  const bad = plantedStores(W);
+  const per = CATEGORIES.length * NEAR_K;
+  const nearBad = (h: number) => {
+    for (let k = h * per; k < (h + 1) * per; k++) if (bad.has(H.near[k]!)) return true;
+    return false;
+  };
   for (let h = 0; h < H.n; h++) {
-    if (H.rogue[h] || H.fraud[h] !== FRAUD.none) continue;
+    if (H.rogue[h] || H.fraud[h] !== FRAUD.none || nearBad(h)) continue;
     const due = H.aidDue[h]!;
     if (due < lf - 8 * HOUR || due > lf + 20 * HOUR) continue;
     cands.push(h);

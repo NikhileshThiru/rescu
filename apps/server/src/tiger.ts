@@ -40,6 +40,8 @@ export interface PaymentRow {
   merchantH3: string;
   latencyMs: number;
   signature: string;
+  /** Null for the sim's own households; the app surface otherwise (migration 005). */
+  origin?: string | null;
 }
 
 type Totals = Pick<Kpis, "disbursedUsd" | "householdsPaid" | "returnedUsd" | "spentUsd" | "payments" | "blocked" | "blockedBy" | "timeToAidMs" | "paymentLatencyMs" | "spentByCategory">;
@@ -196,16 +198,17 @@ export class Tiger {
     const col = <T>(f: (r: PaymentRow) => T) => rows.map(f);
     return this.sql`
       insert into payments (ts, run_id, sim_ts, household, merchant, category, amount_cents, item_ids, item_qty, item_cents,
-                            ok, error, h3_r5, merchant_h3_r5, latency_ms, signature)
+                            ok, error, h3_r5, merchant_h3_r5, latency_ms, signature, origin)
       select to_timestamp(ts / 1000.0), ${runId}::int8, to_timestamp(sim), household, merchant, category, amount_cents,
-             ids::smallint[], qty::smallint[], cents::int[], ok = 1, error, h3::h3index, mh3::h3index, latency_ms, signature
+             ids::smallint[], qty::smallint[], cents::int[], ok = 1, error, h3::h3index, mh3::h3index, latency_ms, signature, origin
       from unnest(
         ${col((r) => r.ts.getTime())}::int8[], ${col((r) => Math.round(r.simT))}::int8[], ${col((r) => r.household)}::int[],
         ${col((r) => r.merchant)}::int[], ${col((r) => r.category)}::text[], ${col((r) => r.amountCents)}::int8[],
         ${col((r) => arr(r.itemIds))}::text[], ${col((r) => arr(r.itemQty))}::text[], ${col((r) => arr(r.itemCents))}::text[],
         ${col((r) => (r.ok ? 1 : 0))}::int[], ${col((r) => r.error)}::text[], ${col((r) => r.h3)}::text[],
-        ${col((r) => r.merchantH3)}::text[], ${col((r) => r.latencyMs)}::int[], ${col((r) => r.signature)}::text[]
-      ) as u(ts, sim, household, merchant, category, amount_cents, ids, qty, cents, ok, error, h3, mh3, latency_ms, signature)`;
+        ${col((r) => r.merchantH3)}::text[], ${col((r) => r.latencyMs)}::int[], ${col((r) => r.signature)}::text[],
+        ${col((r) => r.origin ?? null)}::text[]
+      ) as u(ts, sim, household, merchant, category, amount_cents, ids, qty, cents, ok, error, h3, mh3, latency_ms, signature, origin)`;
   }
 
   // ---------- run records ----------

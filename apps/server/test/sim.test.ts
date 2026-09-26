@@ -4,8 +4,8 @@ import { ServerClock } from "../src/clock.js";
 import { TimeHeap } from "../src/heap.js";
 import { loadStormFile } from "../src/inputs.js";
 import { Rng } from "../src/rng.js";
-import { Households, type Order, PLAN, Shopper } from "../src/shopper.js";
-import { buildWorld, CATEGORIES, NEAR_K, ROGUE, type TractInput } from "../src/world.js";
+import { CHAIN_CAPS, Households, type Order, PLAN, Shopper } from "../src/shopper.js";
+import { buildWorld, CATEGORIES, FRAUD, NEAR_K, ROGUE, type TractInput } from "../src/world.js";
 
 const HOUR = 3600;
 
@@ -93,7 +93,9 @@ describe("shopper", () => {
     if (trip.kind === "orders") {
       trip.orders.forEach((o, i) => {
         log[h]!.push({ t, o });
-        const rejected = o.rogue === ROGUE.generator || o.rogue === ROGUE.resale || o.rogue === ROGUE.unregistered || (o.rogue === ROGUE.spree && i === 2);
+        const overDaily = o.fraud === FRAUD.velocity && s.windowOver(h, t, CHAIN_CAPS.windowSecs).cents + o.amountCents > CHAIN_CAPS.windowCents;
+        if (overDaily) s.bounced[h] = 1;
+        const rejected = o.rogue === ROGUE.generator || o.rogue === ROGUE.resale || o.rogue === ROGUE.unregistered || (o.rogue === ROGUE.spree && i === 2) || overDaily;
         if (!rejected) {
           s.spent[h]! += o.amountCents;
           s.record(h, t, o.amountCents);
@@ -107,7 +109,7 @@ describe("shopper", () => {
   it("never lets an honest order near the chain's caps, even with 5 h of clock slop", () => {
     let orders = 0;
     for (let h = 0; h < H.n; h++) {
-      const legit = log[h]!.filter((x) => x.o.rogue === 0);
+      const legit = log[h]!.filter((x) => x.o.rogue === 0 && !x.o.fraud);
       for (const { t, o } of legit) {
         orders++;
         expect(o.amountCents).toBeLessThanOrEqual(PLAN.orderCapCents);
