@@ -243,18 +243,20 @@ export function buildWorld(input: StormInput, tracts: TractInput[], opts: { hous
     M.h3.push(h3);
     M.lat[m] = lat;
     M.lon[m] = lon;
-    // Stores in the worst wind or flooding close when the storm arrives and reopen days later.
+    // Stores in the worst wind or flooding close when the storm arrives and reopen days later. Not
+    // all of them: near the eye most close, farther out many stay open on generators or reopen
+    // within hours, so people always have somewhere to shop.
     const hi5 = hexIndex.get(h3);
     if (hi5 !== undefined) {
       const kt = hex5.kt[hi5]!;
       const rain = hex5.rainIn[hi5]!;
       const arrive = arrivalOf(h3);
       let days = 0;
-      if (kt >= 96) days = rng.range(4, 8);
-      else if (kt >= 64) days = rng.range(2, 5);
-      else if (kt >= 50) days = rng.range(0.5, 2);
-      else if (kt >= 34) days = rng.range(0.25, 0.75);
-      if (rain >= 12) days += rng.range(1, 3);
+      if (kt >= 96) days = rng.chance(0.85) ? rng.range(3, 7) : 0;
+      else if (kt >= 64) days = rng.chance(0.65) ? rng.range(1.5, 4) : 0;
+      else if (kt >= 50) days = rng.chance(0.45) ? rng.range(0.5, 2) : 0;
+      else if (kt >= 34) days = rng.chance(0.3) ? rng.range(0.25, 0.75) : 0;
+      if (rain >= 12 && (days > 0 || rng.chance(0.35))) days += rng.range(1, 3);
       if (days > 0) {
         M.closedFrom[m] = arrive - 6 * 3600;
         M.reopensAt[m] = arrive + days * 86400;

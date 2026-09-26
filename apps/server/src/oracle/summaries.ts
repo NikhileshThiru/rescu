@@ -21,7 +21,7 @@ export function facts(c: OracleCase): string {
     case "gouging": {
       lines.push(
         `Store: ${c.subjects[0]?.name}`,
-        `Item: ${e.item}, now ${usd(e.priceCents)}; nearby stores charged ${usd(e.medianCents)} before the storm (${e.ratio.toFixed(1)}x, the limit is +${e.thresholdPct}%)`,
+        `Item: ${e.item}, now ${usd(e.priceCents)}${e.series.length ? ` (this store charged ${usd(e.series[0]!.priceCents)} before the storm)` : ""}; the median at nearby stores before the storm was ${usd(e.medianCents)} (${e.ratio.toFixed(1)}x, the limit is +${e.thresholdPct}%)`,
       );
       if (e.otherItems.length) lines.push(`Also marked up: ${e.otherItems.map((o) => `${shortItem(o.item)} ${o.ratio.toFixed(1)}x`).join(", ")}`);
       lines.push(e.sales ? `Relief purchases at the inflated price so far: ${e.sales}, residents overpaid ${usd(e.overchargeCents)}` : "No relief purchases at the inflated price yet");

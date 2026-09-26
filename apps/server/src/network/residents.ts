@@ -19,7 +19,7 @@ import { latLngToCell } from "h3-js";
 import { config } from "../config.js";
 import type { Run } from "../run.js";
 import { deriveKeypair } from "../wallets.js";
-import { CATEGORIES, countyLabel, FRAUD, NEAR_K, plantedStores } from "../world.js";
+import { CATEGORIES, countyLabel, FRAUD, isOpen, NEAR_K, plantedStores } from "../world.js";
 import { ApiFail } from "./errors.js";
 import { haversineKm } from "./market.js";
 
@@ -30,6 +30,8 @@ const JOIN_RADIUS_KM = 6;
 const RELAY_TTL_MS = 60_000;
 const ACCOUNT_CACHE_MS = 800;
 export const PERSONAS = 6;
+/** A persona's open store must be this close (road trips after a storm are short). */
+const PERSONA_SHOP_KM = 25;
 
 /**
  * Someone driving a wallet from the resident app, Grok or MCP: a simulated household taken over
@@ -87,7 +89,7 @@ export class Residents {
   private readonly byIdx = new Map<number, AppResident>();
   private readonly tokens = new Map<string, number>();
   private readonly relays = new Map<string, PendingRelay>();
-  private readonly accounts = new Map<number, { at: number; value: Promise<Account> }>();
+  private readonly accounts = new Map<number, { at: number; value: Promise<Account>; landed: boolean }>();
 
   constructor(private readonly run: Run) {
     this.personaIdx = pickPersonas(run);
@@ -284,12 +286,16 @@ export class Residents {
 
   // ---------- wallets ----------
 
-  /** The chain's view of a resident's relief account, cached briefly (phones poll this). */
+  /**
+   * The chain's view of a resident's relief account, cached briefly (phones poll this). A read
+   * taken before the aid landed is never reused after it, or the wallet shows "landed, $0".
+   */
   account(r: AppResident, fresh = false): Promise<Account> {
+    const landed = !Number.isNaN(this.fundedAt(r));
     const hit = this.accounts.get(r.idx);
-    if (!fresh && hit && Date.now() - hit.at < ACCOUNT_CACHE_MS) return hit.value;
+    if (!fresh && hit && hit.landed === landed && Date.now() - hit.at < ACCOUNT_CACHE_MS) return hit.value;
     const value = this.run.chain.tokenAccount(r.owner, this.run.mint);
-    this.accounts.set(r.idx, { at: Date.now(), value });
+    this.accounts.set(r.idx, { at: Date.now(), value, landed });
     return value;
   }
 
@@ -404,11 +410,13 @@ export class Residents {
 
 /**
  * Six honest households the storm reaches around landfall, in six different counties, favouring
- * the biggest payouts and a mix of household types.
+ * the biggest payouts and a mix of household types. Each has a grocery or general store within
+ * reach that is open from the hour their aid lands, so asking Grok right away finds food and water.
  */
 function pickPersonas(run: Run): number[] {
   const W = run.world;
   const H = W.households;
+  const M = W.merchants;
   const lf = W.domain.landfall;
   const cands: number[] = [];
   // Keep the demo clean: no persona lives next to a planted gouger or colluding store.
@@ -418,10 +426,21 @@ function pickPersonas(run: Run): number[] {
     for (let k = h * per; k < (h + 1) * per; k++) if (bad.has(H.near[k]!)) return true;
     return false;
   };
+  const food = [CATEGORIES.indexOf("grocery"), CATEGORIES.indexOf("general")];
+  const shopsOpen = (h: number, due: number) => {
+    for (const c of food)
+      for (let k = 0; k < NEAR_K; k++) {
+        const m = H.near[h * per + c * NEAR_K + k]!;
+        if (m < 0 || haversineKm(H.lat[h]!, H.lon[h]!, M.lat[m]!, M.lon[m]!) > PERSONA_SHOP_KM) continue;
+        if (isOpen(W, m, due + HOUR) && isOpen(W, m, due + 12 * HOUR) && isOpen(W, m, due + 36 * HOUR)) return true;
+      }
+    return false;
+  };
   for (let h = 0; h < H.n; h++) {
     if (H.rogue[h] || H.fraud[h] !== FRAUD.none || nearBad(h)) continue;
     const due = H.aidDue[h]!;
     if (due < lf - 8 * HOUR || due > lf + 20 * HOUR) continue;
+    if (!shopsOpen(h, due)) continue;
     cands.push(h);
   }
   cands.sort((a, b) => H.aidCents[b]! - H.aidCents[a]! || a - b);
