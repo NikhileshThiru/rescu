@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { DEFAULT_RULES, declarationPda, mintPda, REJECTION_COPY } from "@rescu/chain";
-import type { FeedItem, FeedOrigin, LiveBatch, MerchantDot, OrderLine, PayerKind, RunInfo, RunPhase, Spotlight, StoreState } from "@rescu/live";
+import type { FeedItem, FeedOrigin, LiveBatch, Listing, MerchantDot, OrderLine, PayerKind, RunInfo, RunPhase, Spotlight, StoreState } from "@rescu/live";
 import type { Keypair, PublicKey } from "@solana/web3.js";
 import { ALL_ITEMS } from "./catalog.js";
 import type { ChainRunner, SendResult } from "./chain.js";
@@ -964,6 +964,19 @@ export class Run extends EventEmitter<NetworkEvents> {
     this.batch.spotlight.push({ kind: "oracle", ok: true, from: [round6(r0.lon), round6(r0.lat)], to: null, usd: 0, label: title, rule: null, merchant: null, resident: idx, origin: "oracle", signature: r.signature });
     this.pushFeed({ kind: "oracle", signature: r.signature!, simT, usd: 0, title, detail: reason, rule: null, latencyMs: r.latencyMs, origin: "oracle" }, true);
     return out;
+  }
+
+  /** The merchant terminal sets a listed price: the shelf changes now and the oracle hears about it. */
+  setPrice(m: number, itemId: number, cents: number): Listing {
+    const M = this.world.merchants;
+    if (!Number.isInteger(m) || m < 0 || m >= M.n) throw new ApiFail(404, "not_found", `No store ${m}`);
+    const item = ALL_ITEMS[itemId];
+    if (!item || !this.market.carries(m, itemId)) throw new ApiFail(404, "not_carried", `${M.name[m]} doesn't carry item ${itemId}`);
+    const t = this.clock.now();
+    const before = this.market.setPrice(m, itemId, cents, t);
+    this.activity.push(m, { kind: "price", at: Date.now(), simT: t, cents, lines: [], resident: null, residentName: null, origin: "counter", signature: null, rule: null, detail: `${item.name}: $${(before / 100).toFixed(2)} -> $${(cents / 100).toFixed(2)}` });
+    this.emit("price", { merchant: m, itemId, fromCents: before, toCents: cents, simT: t, at: Date.now(), by: "merchant" });
+    return this.market.listing(m, item, t);
   }
 
   /** An oracle case opened (caseId) or closed (null) on a store: its map dot turns amber. */
