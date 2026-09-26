@@ -1,0 +1,27 @@
+# Rescu on one box: Caddy terminates HTTPS (Let's Encrypt, automatic) for every name.
+# HTTPS is required, not optional: the phone flow uses WebCrypto Ed25519, geolocation and the mic.
+
+rescu.tech, www.rescu.tech {
+	encode zstd gzip
+	# The sim server: REST, the WebSocket, MCP, token metadata, health.
+	@server path /api/* /ws /mcp /mcp/* /run /health
+	handle @server {
+		reverse_proxy 127.0.0.1:4000
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
+
+# Same server under its own name (outside MCP clients, scripts).
+api.rescu.tech {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:4000
+}
+
+# Read-only JSON-RPC for Solana Explorer custom-cluster links (the server filters out writes).
+rpc.rescu.tech {
+	encode zstd gzip
+	rewrite * /rpc
+	reverse_proxy 127.0.0.1:4000
+}

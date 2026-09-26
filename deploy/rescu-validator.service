@@ -1,0 +1,20 @@
+[Unit]
+Description=Rescu solana-test-validator (program preloaded)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=rescu
+WorkingDirectory=/opt/rescu
+Environment=PATH=/home/rescu/.local/share/solana/install/active_release/bin:/usr/local/bin:/usr/bin:/bin
+Environment=BIND_ADDRESS=127.0.0.1
+Environment=KEEP_LEDGER=1
+# The laptop CLI wallet; the validator only needs the address to mark the program upgradeable.
+Environment=UPGRADE_AUTHORITY=2g3HWaUdfb3uhApR7pzp7tFbAZpWnT5fHApfocBV5mFz
+ExecStart=/bin/bash scripts/validator.sh
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=1000000
+
+[Install]
+WantedBy=multi-user.target
