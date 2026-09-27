@@ -10,7 +10,7 @@ Disaster relief on Solana. When a hurricane reaches a home, relief dollars land 
 
 **[Live demo](https://rescu.tech)** · [Resident app](https://rescu.tech/aid) · [Merchant](https://rescu.tech/merchant) · [Oracle](https://rescu.tech/oracle) · [Program on devnet](https://explorer.solana.com/address/GrxgRShVcGaESyztvHHtaCF8YMXVhK3Wq7AesbQCaLy5?cluster=devnet)
 
-Built solo at HackGT 13 · Sep 25–27, 2026
+Built solo at HackGT 13 · Sep 25-27, 2026
 
 </div>
 
@@ -23,7 +23,9 @@ Built solo at HackGT 13 · Sep 25–27, 2026
 [![Watch the Rescu demo](.github/media/hero.jpg)](https://youtu.be/VIDEO_ID)
 -->
 
-![The Rescu Command Center during Hurricane Helene: aid columns rising across Georgia and the Carolinas, purchases flying to local stores](.github/media/hero.jpg)
+![The Rescu Command Center as Hurricane Helene comes ashore at Florida's Big Bend, with relief dollars already landing in wallets on Solana](.github/media/hero.jpg)
+
+<sub>Screenshots are from a full 20,000-household run on a laptop. The measured numbers further down are from the Vultr server.</sub>
 
 ---
 
@@ -43,7 +45,7 @@ So the choice has been fast cash that can be misused, or slow restricted aid tha
 
 ### 1 · Decides who needs aid, from the storm itself
 
-![Aid columns climbing into the North Carolina mountains around Asheville, where Helene's rain did the most damage](.github/media/mountains.jpg)
+![Aid columns across north Georgia, upstate South Carolina and the North Carolina mountains around Asheville, where Helene's rain did the most damage](.github/media/mountains.jpg)
 
 A multi-hazard model scores all **83,241 US census tracts** on wind, rainfall flooding, storm surge, housing type and social vulnerability. It needs no application form and no FEMA data at decision time.
 
@@ -53,7 +55,7 @@ A multi-hazard model scores all **83,241 US census tracts** on wind, rainfall fl
 
 ### 2 · Airdrops the aid as the storm arrives
 
-![Hurricane Helene coming ashore, drawn live on the GPU from NOAA's best track, with aid landing behind the eye](.github/media/landfall.jpg)
+![Aid columns rising behind Helene as it moves over Georgia, while the live panel counts households paid on Solana](.github/media/landfall.jpg)
 
 One click on **Declare disaster & fund** mints a Token-2022 **Relief Dollar** for that declaration ("Relief Dollar · Helene 2024", rUSD) into a program-owned treasury. From then on, each household is paid the moment the storm's winds reach its neighborhood. Places hit only by rain are paid 12 hours after landfall.
 
@@ -107,6 +109,8 @@ Unspent aid expires and is burned by the token's permanent delegate, like EBT be
 
 ## Measured: one full Helene run
 
+![Day 2 of recovery: all 20,000 households paid and purchases flying from homes to local stores](.github/media/overview.jpg)
+
 One Vultr server in Atlanta (8 vCPU / 16 GB) runs our Solana validator, the simulation and the web app, with Tiger Cloud in us-east-1. The disaster was declared 6 hours before landfall at 4× speed, and Day 0 to Day 30 took **7.8 minutes**.
 
 | | |
@@ -117,10 +121,10 @@ One Vultr server in Atlanta (8 vCPU / 16 GB) runs our Solana validator, the simu
 | Refused by the transfer hook | 423 (daily cap 186, order cap 148, resale 45, unregistered store 44) |
 | Day 30 clawback | $9,853,260.92 returned · spent + returned = disbursed, to the cent |
 | Tiger live KPIs | p50 28 ms / p95 39 ms while ingesting up to 2,893 rows/s |
-| Oracle | precision 0.99 (83 of 84 cases real) · recall 0.87 · full scan 35–75 ms |
+| Oracle | precision 0.99 (83 of 84 cases real) · recall 0.87 · full scan 35-75 ms |
 | Grok | 60 case write-ups for the whole run: $0.02 |
 
-Raw throughput of the rule program on the same server: **16,000 of 16,000** hooked payments confirmed at **819/s**, 43–57k compute units each.
+Raw throughput of the rule program on the same server: **16,000 of 16,000** hooked payments confirmed at **819/s**, 43-57k compute units each.
 
 ## On-chain, including public devnet
 
@@ -150,24 +154,6 @@ Explorer links from the live demo go through [rpc.rescu.tech](https://rpc.rescu.
 | [`/oracle`](https://rescu.tech/oracle) | Read the cases the oracle opened, the evidence and Grok's write-ups. |
 
 ## How it's built
-
-```mermaid
-flowchart LR
-  D["NOAA tracks · PRISM rain · USGS surge<br/>Census 2020 · CDC SVI · OpenFEMA"] --> M["Aid model<br/>83,241 tracts"]
-  M --> S
-  subgraph V["One Vultr server"]
-    S["Sim + API<br/>Node · Fastify · WebSocket · MCP"]
-    C[("Solana validator<br/>rescu program:<br/>registry · treasury · transfer hook")]
-    O["Oracle<br/>robust stats + isolation forest"]
-    S -- "aid · payments · suspensions" --> C
-    O --- S
-  end
-  S -- "every transaction" --> T[("Tiger Data<br/>hypertables · continuous aggregates")]
-  T -- "live KPIs in ~30 ms" --> S
-  S <--> G["Grok<br/>shopper · case write-ups"]
-  S <-->|WebSocket| W["Next.js · MapLibre · deck.gl<br/>Command Center · /aid · /merchant · /oracle"]
-  A["Any AI agent"] -- "MCP" --> S
-```
 
 | Layer | |
 |---|---|
