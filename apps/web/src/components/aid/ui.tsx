@@ -108,7 +108,7 @@ export function Pill({ children, tone = "neutral", className }: { children: Reac
   return (
     <span
       className={cx(
-        "inline-flex h-6 items-center gap-1 rounded-full border px-2.5 text-2xs font-medium tabular",
+        "inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-2xs font-medium tabular",
         tone === "neutral" && "border-line bg-surface-2 text-text-2",
         tone === "teal" && "border-teal/20 bg-teal-soft text-teal",
         tone === "amber" && "border-amber/25 bg-amber-soft text-amber",
