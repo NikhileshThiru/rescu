@@ -170,7 +170,7 @@ export function CommandCenter() {
       />
 
       {/* Soft edge vignette so panels sit on a calm frame. */}
-      <div className="pointer-events-none absolute inset-0 z-[5] bg-[radial-gradient(ellipse_at_center,transparent_60%,rgba(4,6,12,0.32)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 z-[5] bg-[radial-gradient(ellipse_at_center,transparent_62%,rgba(12,40,56,0.22)_100%)]" />
 
       <TopBar
         clock={clock}

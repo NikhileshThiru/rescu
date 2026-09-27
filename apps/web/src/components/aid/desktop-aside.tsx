@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { renderSVG } from "uqr";
 import { Dot } from "@/components/ui/primitives";
+import { aidUrl } from "@/lib/site";
 import { useAid } from "./aid-context";
 import { IconShield, IconSpark, IconStorm } from "./icons";
 import { EASE, useMotion } from "./ui";
@@ -19,10 +20,11 @@ export function DesktopAside() {
   const { run, wallet } = useAid();
   const { reduce } = useMotion();
   const [qr, setQr] = useState<string | null>(null);
+  const [qrHref, setQrHref] = useState("");
   useEffect(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("order");
-    setQr(renderSVG(url.toString(), { pixelSize: 4, whiteColor: "#e6edf7", blackColor: "#070b14", border: 2 }));
+    const url = aidUrl();
+    setQrHref(url);
+    setQr(renderSVG(url, { pixelSize: 4, whiteColor: "#e6edf7", blackColor: "#070b14", border: 2 }));
   }, []);
 
   const phase = run?.phase;
@@ -73,6 +75,9 @@ export function DesktopAside() {
             <p className="mt-1 text-[12.5px] leading-[18px] text-text-3">
               Scan, tap &ldquo;I live here&rdquo;, and your phone makes its own wallet key. {wallet ? "" : "Aid lands when the storm reaches you."}
             </p>
+            {qrHref && (
+              <p className="mt-1.5 truncate font-mono text-[11px] text-text-3">{qrHref.replace(/^https?:\/\//, "")}</p>
+            )}
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import { counterChargeUrl, type Listing, type Order, type StoreActivity } from "
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { siteOrigin } from "@/lib/site";
 import { QrCode } from "../command/scan-to-join";
 import { Button, cx } from "../ui/primitives";
 import { money, txHref } from "./money";
@@ -94,7 +95,7 @@ export function RingUp({
     }
   };
 
-  const url = order ? counterChargeUrl(process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin, order.id) : "";
+  const url = order ? counterChargeUrl(siteOrigin(), order.id) : "";
 
   return (
     <AnimatePresence>

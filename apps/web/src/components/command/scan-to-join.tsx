@@ -3,11 +3,11 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { encode } from "uqr";
+import { aidUrl } from "@/lib/site";
 import { Button, cx, Kbd } from "../ui/primitives";
 
 export function joinUrl(): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
-  return `${base.replace(/\/$/, "")}/aid`;
+  return aidUrl();
 }
 
 /**

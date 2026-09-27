@@ -1,9 +1,8 @@
 import { aidArrival, mainLandfall } from "@rescu/live";
 import { cellToLatLng } from "h3-js";
 import type { HexColumns, StormFile } from "./storm-data";
-import { AID_STOPS, hex, ramp, type RGB, WIND_STOPS } from "./tokens";
+import { AID_STOPS, ramp, type RGB, WIND_STOPS } from "./tokens";
 
-const BG = hex("#070b14");
 const HIDDEN_BEFORE = 2 * 3600;
 /** Aid columns rise over this much sim time once the storm reaches a hex. */
 const AID_RISE = 4 * 3600;
@@ -193,10 +192,11 @@ export class HexField {
       const g = wg + (ag - wg) * mix;
       const b = wb + (ab - wb) * mix;
       const o = i * 4;
-      this.color[o] = BG[0] + (r - BG[0]) * f;
-      this.color[o + 1] = BG[1] + (g - BG[1]) * f;
-      this.color[o + 2] = BG[2] + (b - BG[2]) * f;
-      this.color[o + 3] = (wa + (aa - wa) * mix) * (0.55 + 0.45 * f);
+      // Outside the focus region hexes fade out rather than darken, so they never smudge the land.
+      this.color[o] = r;
+      this.color[o + 1] = g;
+      this.color[o + 2] = b;
+      this.color[o + 3] = (wa + (aa - wa) * mix) * (0.08 + 0.92 * f);
       this.height[i] = we + (ae - we) * mix;
     }
   }

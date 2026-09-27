@@ -133,20 +133,16 @@ export function RightRail({
             <LiveNetwork live={live} clock={clock} slug={file.storm.slug} timeline={timeline} onStorm={onStorm} />
             <Divider />
 
-            <Section title="Aid decided at landfall" aside={<Badge tone="teal">Full-scale projection</Badge>}>
+            <Section title="Who gets aid · whole storm" aside={<Badge tone="teal">Model plan</Badge>}>
+              <p className="-mt-1 mb-3 text-2xs leading-relaxed text-text-3">
+                The plan for everyone in the storm&apos;s path. The live network pays a sample of it.
+              </p>
               <div className="grid grid-cols-2 gap-x-3 gap-y-3.5">
                 <Stat label="Households" size="lg" sub={`in ${p.declaredCounties} counties`}>
                   <NumberTicker value={p.eligibleHouseholds} format={compact} />
                 </Stat>
-                <Stat label="Aid pot" size="lg" tone="teal" sub="$1,000 average">
+                <Stat label="Total aid" size="lg" tone="teal" sub={`${usd(p.minAidUsd)} to ${usd(p.maxAidUsd)} each`}>
                   <NumberTicker value={p.potUsd} format={usdCompact} />
-                </Stat>
-                <Stat label="Per household" sub={`${usd(p.minAidUsd)} to ${usd(p.maxAidUsd)}`}>
-                  <NumberTicker value={p.medianAidUsd} format={usd} />
-                  <span className="ml-1 text-xs font-normal text-text-3">median</span>
-                </Stat>
-                <Stat label="Counties" sub="declared by the model">
-                  <NumberTicker value={p.declaredCounties} format={int} />
                 </Stat>
               </div>
               <div className="mt-4">
