@@ -4,6 +4,8 @@
 
 # Rescu
 
+🏆 **Best Use of Solana Winner at HackGT 13** 🏆
+
 ### Aid airdropped in seconds.
 
 Disaster relief on Solana. When a hurricane reaches a home, relief dollars land in that family's wallet in under a second. They can only be spent at verified local stores, Grok does the shopping, and an ML oracle stops price gouging on-chain.
