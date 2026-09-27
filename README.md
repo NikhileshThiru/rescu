@@ -16,12 +16,6 @@ Built solo at HackGT 13 · Sep 25-27, 2026
 
 ---
 
-### ▶ Demo video
-
-> **Coming soon.** The 3-minute walkthrough will be linked here.
-<!-- Replace the block above with:
-[![Watch the Rescu demo](.github/media/hero.jpg)](https://youtu.be/VIDEO_ID)
--->
 
 ![The Rescu Command Center as Hurricane Helene comes ashore at Florida's Big Bend, with relief dollars already landing in wallets on Solana](.github/media/hero.jpg)
 
