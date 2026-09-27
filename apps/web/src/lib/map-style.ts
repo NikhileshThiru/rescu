@@ -2,33 +2,34 @@ import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
 
-/** A rich ocean blue: clearly a sea at world view, a little deeper at storm zoom so hexes win. */
-const WATER_FAR = "#0b4f7e";
-const WATER_NEAR = "#083a62";
-const WOOD = "#1f5e38";
-const PARK = "#1f5e38";
-const waterFill = ["interpolate", ["linear"], ["zoom"], 0, WATER_FAR, 3, "#0a4572", 6, WATER_NEAR] as unknown[];
+/** Deep-sea blue: clearly an ocean at world view, a touch deeper at storm zoom so hexes win. */
+const WATER_FAR = "#0d2c4d";
+const WATER_NEAR = "#09203a";
+const WOOD = "#1f3d2a";
+const PARK = "#1f3d2a";
+const waterFill = ["interpolate", ["linear"], ["zoom"], 0, WATER_FAR, 3, "#0b2644", 6, WATER_NEAR] as unknown[];
 const HIDDEN = /^(aeroway|road_|highway_name|railway|building|water_name|place_other|place_suburb|place_village)/;
 
 /**
  * Natural Earth II shaded relief under the vector layers, in its real greens and tans (the east
- * is forest, the west is range), lifted and a little more saturated so the map reads vivid, not muddy.
+ * is forest, the west is range), slightly muted and dimmed so it reads natural and the data wins.
  */
 const RELIEF: LayerSpecification = {
   id: "relief",
   type: "raster",
   source: "ne2_shaded",
   paint: {
-    "raster-saturation": 0.3,
-    "raster-brightness-min": 0.04,
-    "raster-brightness-max": 0.66,
-    "raster-contrast": 0.12,
+    "raster-saturation": -0.1,
+    "raster-hue-rotate": 6,
+    "raster-brightness-min": 0.03,
+    "raster-brightness-max": 0.52,
+    "raster-contrast": 0.18,
     "raster-opacity": 1,
   },
 };
 
 /**
- * OpenFreeMap's dark style, recoloured: natural green-and-tan land with real relief over a rich
+ * OpenFreeMap's dark style, recoloured: natural green-and-tan land with real relief over a deep
  * blue sea, quiet roads, readable labels. POIs, rail, road names and buildings stay off.
  */
 export async function loadMapStyle(): Promise<StyleSpecification> {
@@ -52,10 +53,10 @@ function recolor(layer: LayerSpecification): LayerSpecification {
     paint["line-color"] = WATER_NEAR;
   } else if (id === "landcover_wood") {
     paint["fill-color"] = WOOD;
-    paint["fill-opacity"] = ["interpolate", ["linear"], ["zoom"], 3, 0.15, 7, 0.3];
+    paint["fill-opacity"] = 0.16;
   } else if (id === "landuse_park") {
     paint["fill-color"] = PARK;
-    paint["fill-opacity"] = ["interpolate", ["linear"], ["zoom"], 3, 0.1, 7, 0.25];
+    paint["fill-opacity"] = 0.1;
   } else if (id.startsWith("landcover_ice") || id.startsWith("landcover_glacier")) {
     paint["fill-color"] = "#1a2830";
     paint["fill-opacity"] = 0.35;
@@ -63,17 +64,17 @@ function recolor(layer: LayerSpecification): LayerSpecification {
     paint["fill-color"] = "#12241a";
     paint["fill-opacity"] = 0;
   } else if (id.startsWith("highway")) {
-    paint["line-color"] = id.includes("casing") ? "rgba(0,0,0,0)" : "#2c4636";
+    paint["line-color"] = id.includes("casing") ? "rgba(0,0,0,0)" : "#26352c";
     paint["line-opacity"] = ["interpolate", ["linear"], ["zoom"], 5, 0.28, 9, 0.7];
   } else if (id === "boundary_state") {
-    paint["line-color"] = "#6f8f7c";
+    paint["line-color"] = "#5c7266";
     paint["line-opacity"] = 0.85;
   } else if (id.startsWith("boundary_country")) {
-    paint["line-color"] = "#8aa896";
+    paint["line-color"] = "#7a8f83";
   } else if (id.startsWith("place_")) {
     const major = id === "place_city_large" || id === "place_state" || id.startsWith("place_country");
-    paint["text-color"] = major ? "#eef4f0" : "#d2ddd6";
-    paint["text-halo-color"] = "rgba(6,20,26,0.55)";
+    paint["text-color"] = major ? "#e6ece8" : "#bcc7c0";
+    paint["text-halo-color"] = "rgba(5,14,22,0.7)";
     paint["text-halo-width"] = 1.1;
     paint["text-halo-blur"] = 0.9;
     if (l.layout && "icon-image" in l.layout) delete l.layout["icon-image"];
@@ -82,7 +83,7 @@ function recolor(layer: LayerSpecification): LayerSpecification {
       const layout = (l.layout ??= {});
       layout["text-transform"] = "uppercase";
       layout["text-letter-spacing"] = 0.18;
-      paint["text-color"] = "rgba(236,243,238,0.72)";
+      paint["text-color"] = "rgba(226,234,229,0.62)";
     }
   }
   return l;

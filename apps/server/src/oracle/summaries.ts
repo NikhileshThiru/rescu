@@ -2,8 +2,10 @@ import type { OracleCase } from "@rescu/live";
 import { type Grok, GrokUnavailable } from "../grok.js";
 
 const CONCURRENCY = 2;
-/** Grok write-ups per run; past this, cases get the template text. */
+/** Grok write-ups per run for the sim's own cases; past this, they get the template text. */
 export const MAX_SUMMARIES = 60;
+/** Separate budget for live demo cases (a presenter's price edit, a phone resident), so they always get Grok. */
+export const MAX_APP_SUMMARIES = 40;
 
 const SYSTEM =
   "You are the fraud and price watchdog of a disaster relief program. Write exactly 2 or 3 short, plain sentences for a relief official who is not technical: " +
@@ -79,6 +81,7 @@ export class Summarizer {
   private queue: { id: string; priority: number }[] = [];
   private inFlight = 0;
   count = 0;
+  private appCount = 0;
   usd = 0;
   private stopped = false;
 
@@ -114,12 +117,14 @@ export class Summarizer {
   }
 
   private async write(c: OracleCase) {
-    if (this.count >= MAX_SUMMARIES || !this.grok.enabled) {
+    const capped = c.fromApp ? this.appCount >= MAX_APP_SUMMARIES : this.count - this.appCount >= MAX_SUMMARIES;
+    if (capped || !this.grok.enabled) {
       c.summary = { status: "fallback", text: fallbackText(c), model: null };
       this.changed(c);
       return;
     }
     this.count++;
+    if (c.fromApp) this.appCount++;
     try {
       const r = await this.grok.chat({
         purpose: "oracle",

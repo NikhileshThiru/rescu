@@ -526,7 +526,8 @@ export class OracleEngine {
       st.cases.set(c.id, c);
       this.flag(st, c, true);
       this.publish(st, c, true);
-      st.summarizer.enqueue(c.id, x.priority * 10 + score);
+      // Live demo cases jump the queue: the presenter is waiting on that write-up.
+      st.summarizer.enqueue(c.id, (fromApp ? 1000 : 0) + x.priority * 10 + score);
       return;
     }
     const material =

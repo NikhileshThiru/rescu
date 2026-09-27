@@ -25,7 +25,7 @@ Built solo at HackGT 13 · Sep 25-27, 2026
 
 ![The Rescu Command Center as Hurricane Helene comes ashore at Florida's Big Bend, with relief dollars already landing in wallets on Solana](.github/media/hero.jpg)
 
-<sub>Screenshots are from a full 20,000-household run on a laptop. The measured numbers further down are from the Vultr server.</sub>
+<sub>Screenshots are from a live 20,000-household run on rescu.tech. The measured numbers further down are from a separate full benchmark run.</sub>
 
 ---
 
